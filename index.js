@@ -120,6 +120,14 @@ class MemoryCache {
 
 const cache = new MemoryCache();
 
+function doesRequestWantCache  (req) {
+	return req.get("Cache-Control") !== "no-cache";
+}
+
+/**
+ * @typedef {"MISS" | "HIT" | "STORED" | "NOT_STORED"} CacheEvent
+ */
+
 /**
  * Middleware function for Express.js to enable caching.
  *
@@ -127,9 +135,11 @@ const cache = new MemoryCache();
  * @param {Function} [opts.dependsOn=() => []] - A function that returns an array of dependency values for cache checking.
  * @param {number} [opts.timeOut=3600000] - Timeout in milliseconds for cache expiration. Default is 1 hour (3600000 ms).
  * @param {Function} [opts.onTimeout=() => { console.log("Cache removed"); }] - A callback function to execute when a cached item expires.
- * @param {Function} [opts.onCacheMiss=(url: string) => {  }] - A callback function to execute when a request is not found in cache.
- * @param {Function} [opts.onCacheServed=(url: string) => {  }] - A callback function to execute when a cached item is served.
- * @param {Function} [opts.onCacheStored=(url: string) => {  }] - A callback function to execute when a cached item is stored / updated.
+ * @param {Function} [opts.onCacheEvent=(event: CacheEvent, url: string, reason: string) => {  }] - A callback function to execute when a cache
+ * event is raised.
+ * @param {Function} [opts.cacheStatusCode=(statusCode: number): boolean => { return statusCode >= 200 && statusCode < 400; }] - A callback function to determine
+ * if the response should be cached based on the response statusCode. Defaults to only caching responses in the range of 200 to 399.
+ * @param {Function} [opts.provideCacheKey=(url, req): string => { return "c_" + hashString(cacheUrl); }] Use this to override the key that cached objects are stored in.
  * @returns {function} - Middleware function.
  */
 function expressCache(opts = {}) {
@@ -139,9 +149,13 @@ function expressCache(opts = {}) {
 		onTimeout: () => {
 			console.log("Cache removed");
 		},
-		onCacheMiss: () => {},
-		onCacheServed: () => {},
-		onCacheStored: () => {}
+		onCacheEvent: () => {},
+		cacheStatusCode: (statusCode) => {
+			return statusCode >= 200 && statusCode < 400;
+		},
+		provideCacheKey: (cacheUrl, req) => {
+			return "c_" + hashString(cacheUrl);
+		}
 	};
 
 	const options = {
@@ -149,16 +163,32 @@ function expressCache(opts = {}) {
 		...opts,
 	};
 
-	const { dependsOn, timeOut, onTimeout, onCacheMiss, onCacheServed, onCacheStored } = options;
+	const {
+		dependsOn,
+		timeOut,
+		onTimeout,
+		onCacheEvent,
+		cacheStatusCode,
+		provideCacheKey
+	} = options;
 
 	return function (req, res, next) {
 		const cacheUrl = req.originalUrl || req.url;
-		const cacheKey = "c_" + hashString(cacheUrl);
+		const wantsCache = doesRequestWantCache(req);
+		const cacheKey = provideCacheKey(cacheUrl, req);
 		const depArrayValues = dependsOn();
-
 		const cachedResponse = cache.get(cacheKey, depArrayValues);
+		const missReasons = [];
 
-		if (cachedResponse) {
+		if (!wantsCache) {
+			missReasons.push("CACHE_CONTROL_HEADER");
+		}
+
+		if (!cachedResponse) {
+			missReasons.push("RESPONSE_NOT_IN_CACHE");
+		}
+
+		if (wantsCache && cachedResponse) {
 			const cachedBody = cachedResponse.body;
 			const cachedHeaders = cachedResponse.headers;
 			const cachedStatusCode = cachedResponse.statusCode;
@@ -171,44 +201,43 @@ function expressCache(opts = {}) {
 			if (typeof cachedBody === "string") {
 				try {
 					const jsonData = JSON.parse(cachedBody);
-					onCacheServed(cacheUrl);
+					onCacheEvent("HIT", cacheUrl);
 					res.status(cachedStatusCode).json(jsonData);
 				} catch (error) {
-					onCacheServed(cacheUrl);
+					onCacheEvent("HIT", cacheUrl);
 					res.status(cachedStatusCode).send(cachedBody);
 				}
 			} else {
-				onCacheServed(cacheUrl);
+				onCacheEvent("HIT", cacheUrl);
 				res.status(cachedStatusCode).send(cachedBody);
 			}
 		} else {
-			onCacheMiss(cacheUrl);
+			onCacheEvent("MISS", cacheUrl, missReasons.join("; "));
 			const originalSend = res.send;
 			const originalJson = res.json;
 
+			const storeCache = (bodyContent) => {
+				// Check the status code before storing
+				if (!cacheStatusCode(res.statusCode)) {
+					return onCacheEvent("NOT_STORED", cacheUrl, "STATUS_CODE");
+				}
+
+				cache.set(cacheKey, {
+					body: bodyContent,
+					headers: JSON.stringify(res.getHeaders()),
+					statusCode: res.statusCode
+				}, timeOut, onTimeout, depArrayValues);
+
+				onCacheEvent("STORED", cacheUrl);
+			}
+
 			res.send = function (body) {
-				cache.set(
-					cacheKey,
-					{
-						body: typeof body === "object" ? JSON.stringify(body) : body,
-						headers: JSON.stringify(res.getHeaders()),
-						statusCode: res.statusCode
-					},
-					timeOut,
-					onTimeout,
-					depArrayValues
-				);
-				onCacheStored(cacheUrl);
+				storeCache(typeof body === "object" ? JSON.stringify(body) : body);
 				originalSend.call(this, body);
 			};
 
 			res.json = function (body) {
-				cache.set(cacheKey, {
-					body: body,
-					headers: JSON.stringify(res.getHeaders()),
-					statusCode: res.statusCode
-				}, timeOut, onTimeout, depArrayValues);
-				onCacheStored(cacheUrl);
+				storeCache(body)
 				originalJson.call(this, body);
 			};
 
