@@ -1,3 +1,8 @@
+const { Emitter } = require('@irrelon/emitter');
+const emitter = new Emitter();
+
+const inFlight = {};
+
 /**
  * Hashes a string to create a unique cache key.
  * @param {string} str - The input string to be hashed.
@@ -124,6 +129,24 @@ function doesRequestWantCache  (req) {
 	return req.get("Cache-Control") !== "no-cache";
 }
 
+function respondWithCachedResponse (cachedResponse, res, onCacheEvent) {
+	const cachedBody = cachedResponse.body;
+	const cachedHeaders = cachedResponse.headers;
+	const cachedStatusCode = cachedResponse.statusCode;
+	const cachedIsJson = cachedResponse.isJson;
+
+	// Set headers that we cached
+	if (cachedHeaders) {
+		res.set(JSON.parse(cachedHeaders));
+	}
+
+	res.status(cachedStatusCode).send(cachedBody);
+}
+
+function getPoolSize (cacheKey) {
+	return ((emitter._eventListeners && emitter._eventListeners[cacheKey] && emitter._eventListeners[cacheKey]["*"]) || []).length;
+}
+
 /**
  * @typedef {"MISS" | "HIT" | "STORED" | "NOT_STORED"} CacheEvent
  */
@@ -185,64 +208,67 @@ function expressCache(opts = {}) {
 		}
 
 		if (!cachedResponse) {
-			missReasons.push("RESPONSE_NOT_IN_CACHE");
+			if (inFlight[cacheKey]) {
+				missReasons.push(`RESPONSE_POOLED: ${getPoolSize(cacheKey) + 1}`);
+			} else {
+				missReasons.push("RESPONSE_NOT_IN_CACHE");
+			}
 		}
 
 		if (wantsCache && cachedResponse) {
-			const cachedBody = cachedResponse.body;
-			const cachedHeaders = cachedResponse.headers;
-			const cachedStatusCode = cachedResponse.statusCode;
-
-			// Set headers that we cached
-			if (cachedHeaders) {
-				res.set(JSON.parse(cachedHeaders));
-			}
-
-			if (typeof cachedBody === "string") {
-				try {
-					const jsonData = JSON.parse(cachedBody);
-					onCacheEvent("HIT", cacheUrl);
-					res.status(cachedStatusCode).json(jsonData);
-				} catch (error) {
-					onCacheEvent("HIT", cacheUrl);
-					res.status(cachedStatusCode).send(cachedBody);
-				}
-			} else {
-				onCacheEvent("HIT", cacheUrl);
-				res.status(cachedStatusCode).send(cachedBody);
-			}
-		} else {
-			onCacheEvent("MISS", cacheUrl, missReasons.join("; "));
-			const originalSend = res.send;
-			const originalJson = res.json;
-
-			const storeCache = (bodyContent) => {
-				// Check the status code before storing
-				if (!cacheStatusCode(res.statusCode)) {
-					return onCacheEvent("NOT_STORED", cacheUrl, "STATUS_CODE");
-				}
-
-				cache.set(cacheKey, {
-					body: bodyContent,
-					headers: JSON.stringify(res.getHeaders()),
-					statusCode: res.statusCode
-				}, timeOut, onTimeout, depArrayValues);
-
-				onCacheEvent("STORED", cacheUrl);
-			}
-
-			res.send = function (body) {
-				storeCache(typeof body === "object" ? JSON.stringify(body) : body);
-				originalSend.call(this, body);
-			};
-
-			res.json = function (body) {
-				storeCache(body)
-				originalJson.call(this, body);
-			};
-
-			next();
+			onCacheEvent("HIT", cacheUrl);
+			respondWithCachedResponse(cachedResponse, res);
+			return;
 		}
+
+		onCacheEvent("MISS", cacheUrl, missReasons.join("; "));
+		const originalSend = res.send;
+		const originalJson = res.json;
+
+		// Check if there is a pool for this cacheKey
+		if (wantsCache && inFlight[cacheKey]) {
+			// We already have a request in flight for this resource, hook the event handler
+			emitter.once(cacheKey, (cachedResponse) => {
+				respondWithCachedResponse(cachedResponse, res);
+			});
+			return;
+		}
+
+		inFlight[cacheKey] = true;
+
+		const storeCache = (bodyContent, isJson = false) => {
+			delete inFlight[cacheKey];
+
+			// Check the status code before storing
+			if (!cacheStatusCode(res.statusCode)) {
+				return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
+			}
+
+			const cachedResponse = {
+				isJson,
+				body: isJson ? JSON.stringify(bodyContent) : bodyContent,
+				headers: JSON.stringify(res.getHeaders()),
+				statusCode: res.statusCode
+			};
+
+			cache.set(cacheKey, cachedResponse, timeOut, onTimeout, depArrayValues);
+
+			onCacheEvent("STORED", cacheUrl);
+			onCacheEvent("RELEASING", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+			emitter.emit(cacheKey, cachedResponse);
+		}
+
+		res.send = function (body) {
+			storeCache(body, typeof body === "object");
+			originalSend.call(this, body);
+		};
+
+		res.json = function (body) {
+			storeCache(body, true)
+			originalJson.call(this, body);
+		};
+
+		next();
 	};
 }
 module.exports = expressCache;
