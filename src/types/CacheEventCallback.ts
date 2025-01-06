@@ -1,4 +1,4 @@
-import {CacheEvent} from "./CacheEvent";
+import type {CacheEvent} from "./CacheEvent";
 
 /**
  * @param evt The cache event being raised.
@@ -6,3 +6,4 @@ import {CacheEvent} from "./CacheEvent";
  * @param reason The reason for the event.
  */
 export type CacheEventCallback = (evt: CacheEvent, url: string, reason?: string) => void;
+

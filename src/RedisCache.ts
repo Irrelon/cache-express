@@ -6,7 +6,7 @@ import type {RedisCacheConstructorOptions} from "./types/RedisCacheConstructorOp
  * RedisCache class for caching data to a redis server.
  */
 export class RedisCache implements CacheInterface {
-	client: RedisClientType;
+	client: RedisClientType<any>;
 	dependencies: Record<string, any[]>;
 	timers: Record<string, any>;
 
@@ -54,7 +54,8 @@ export class RedisCache implements CacheInterface {
 		// Attempt to parse the stored data to JSON
 		try {
 			item = JSON.parse(data);
-		} catch (err) {
+		} catch (err: unknown) {
+			void err;
 			// Parsing the data returned an error, invalid JSON
 			void this.remove(key);
 			return null;

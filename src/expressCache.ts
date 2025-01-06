@@ -13,13 +13,13 @@ export const inFlight: Record<string, boolean> = {};
  * @param str The input string to be hashed.
  * @returns The generated hash value.
  */
-function hashString(str: string): number {
+export function hashString(str: string): string {
 	let hash = 0;
 	for (let i = 0; i < str.length; i++) {
 		const charCode = str.charCodeAt(i);
 		hash = ((hash << 5) - hash + charCode) | 0;
 	}
-	return hash + 2147483647 + 1;
+	return (hash + 2147483647 + 1).toString();
 }
 
 function hasNoCacheHeader  (req: Request) {
@@ -93,7 +93,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 		cache
 	} = options;
 
-	return async function (req: Request, res: Response, next: NextFunction) {
+	return async function (req: Request<any>, res: Response<any>, next: NextFunction) {
 		const cacheUrl = req.originalUrl || req.url;
 		const isNoCacheHeaderPresent = hasNoCacheHeader(req);
 		const cacheKey = provideCacheKey(cacheUrl, req);

@@ -18,12 +18,13 @@
 		"resolveJsonModule": true,
 		"verbatimModuleSyntax": true,
 		"isolatedModules": true,
-		"noEmit": false,
-		"jsx": "react-jsx",
+
+		"rootDir": "./src",
+		"declaration": true,
+		"declarationMap": true,
+		"emitDeclarationOnly": true,
 		"outDir": "build",
-		"declaration": false
+		"composite": true
 	},
-	"include": [
-		"src"
-	]
+	"include": ["src"]
 }

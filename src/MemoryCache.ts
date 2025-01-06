@@ -1,4 +1,4 @@
-import {CacheInterface} from "./types/CacheInterface";
+import type {CacheInterface} from "./types/CacheInterface";
 
 /**
  * MemoryCache class for caching data in memory.
