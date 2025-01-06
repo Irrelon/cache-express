@@ -1,51 +1,62 @@
-# Express Cache Middleware
+# Express Caching Middleware
 
-Boost the performance of your Express.js web applications with this middleware that simplifies and optimizes caching. Reduce server load, improve response times, and enjoy customizable cache settings, including timeouts and dependency-based cache invalidation
+Add cache support to your Express application. Supports in-memory and
+Redis-based caching out of the box.
 
-- Provides efficient caching for Express.js routes, reducing server load and response times.
-- Supports customizable cache timeouts and callback functions upon cache expiration.
-- Offers dependency-based cache invalidation to ensure data consistency.
+## Install
 
-## Features
-
-- **Efficient Caching:** Improve the performance of your Express.js applications by caching responses.
-
-- **Dependency-Based Invalidation:** You can give a dependency array to invalidate cache whenever any of the dependencies changed.( You created new post, change the dependency, new comment made, change the dependency.)
-
-- **Customizable Timeout:** Set cache expiration times to suit your application's needs.
-
-- **Plug and Play** Simply apply the middleware to your routes for instant caching benefits. It automatically caches your responses and uses it when needed.
-
-**Overview:**
-
-The Express Cache Middleware is a package that enables easy and efficient caching for your small or mid-sized Express.js applications. It enhances the performance of your web server by storing and serving previously generated responses, reducing the load on your server and improving response times. For advanced caching mechanism or big applications, please go for Redis or memcached.
-
-## Install and Usage
-
-You can install the Express Cache Middleware package using npm. Open your terminal or command prompt and run the following command:
-
-```sh
-npm install cache-express
+```
+npm install @irrelon/cache-express
 ```
 
-To use the Express Cache Middleware, simply import it and apply it as middleware to your Express.js routes.
+## Usage
+Add the expressCache() function before your route handler function.
 
-```javascript
+### In Memory Cache
+```typescript
 import express from "express";
-import expressCache from "cache-express";
+import {expressCache, MemoryCache} from "@irrelon/cache-express";
 
 const app = express();
+const inMemoryCache = new MemoryCache();
 
 // Apply the caching middleware to a route
 app.get(
 	"/api/data",
 	expressCache({
+		cache: inMemoryCache
 		/*options*/
-	})
+	}),
+	// Your route handler function
+	(req, res, next) => {
+		res.send("hello!");
+	}
 );
 ```
 
-## Options
+### Redis Cache
+```typescript
+import express from "express";
+import {expressCache, RedisCache} from "@irrelon/cache-express";
+
+const app = express();
+const redisCache = new RedisCache("redis://localhost:6380");
+
+// Apply the caching middleware to a route
+app.get(
+	"/api/data",
+	expressCache({
+		cache: redisCache
+		/*options*/
+	}),
+	// Your route handler function
+	(req, res, next) => {
+		res.send("hello!");
+	}
+);
+```
+
+### Options
 
 The Express Cache Middleware provides several configuration options to tailor caching behavior to your specific needs:
 

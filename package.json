@@ -1,23 +1,27 @@
 {
 	"name": "@irrelon/cache-express",
-	"version": "1.0.0",
+	"version": "2.0.0",
 	"description": "Express Cache Middleware: Effortlessly cache responses with custom timeouts, dependencies, pooling, support for cache-control",
 	"license": "MIT",
 	"repository": "https://github.com/irrelon/cache-express",
 	"author": "Irrelon Software Limited - Rob Evans",
-	"contributors": [{
-		"name": "Ali Haydar GÜLEÇ",
-		"email": "alihaydargulec@gmail.com"
-	}],
+	"contributors": [
+		{
+			"name": "Rob Evans",
+			"email": "rob@irrelon.com"
+		},
+		{
+			"name": "Ali Haydar GÜLEÇ",
+			"email": "alihaydargulec@gmail.com"
+		}
+	],
 	"exports": "./index.js",
 	"engines": {
 		"node": ">=16"
 	},
-	"scripts": {
-
-	},
+	"scripts": {},
 	"files": [
-		"index.js"
+		"src/index.ts"
 	],
 	"keywords": [
 		"express",
@@ -27,7 +31,13 @@
 		"dependency based cache"
 	],
 	"dependencies": {
-		"@irrelon/emitter": "^6.0.1"
+		"@irrelon/emitter": "^6.0.1",
+		"@types/express": "^5.0.0",
+		"@types/redis": "^4.0.10",
+		"redis": "^4.7.0"
 	},
-	"private": false
+	"private": false,
+	"devDependencies": {
+		"@types/node": "^22.10.1"
+	}
 }

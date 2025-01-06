@@ -1,0 +1,28 @@
+{
+	"compilerOptions": {
+		"target": "ES2015",
+		"module": "CommonJS",
+		"lib": [
+			"dom",
+			"dom.iterable",
+			"esnext"
+		],
+		"allowJs": false,
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+		"strict": true,
+		"forceConsistentCasingInFileNames": true,
+		"noFallthroughCasesInSwitch": false,
+		"moduleResolution": "node",
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"noEmit": false,
+		"jsx": "react-jsx",
+		"outDir": "build",
+		"declaration": true
+	},
+	"include": [
+		"src"
+	]
+}
