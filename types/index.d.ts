@@ -22,7 +22,7 @@ interface CacheInterface {
     remove: (key: string) => Promise<void>;
 }
 
-type CacheEvent = "MISS" | "HIT" | "STORED" | "NOT_STORED" | "RELEASING";
+type CacheEvent = "MISS" | "HIT" | "STORED" | "NOT_STORED" | "POOL_SEND";
 
 /**
  * @param evt The cache event being raised.

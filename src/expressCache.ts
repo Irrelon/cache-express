@@ -96,7 +96,8 @@ export function expressCache(opts: ExpressCacheOptions) {
 	return async function (req: Request<any>, res: Response<any>, next: NextFunction) {
 		const cacheUrl = req.originalUrl || req.url;
 		const isNoCacheHeaderPresent = hasNoCacheHeader(req);
-		const cacheKey = provideCacheKey(cacheUrl, req);
+		// @ts-expect-error cacheHash is a legit key
+		const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
 		const depArrayValues = dependsOn();
 		const cachedResponse = await cache.get(cacheKey, depArrayValues);
 		const missReasons = [];
@@ -151,7 +152,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 			cache.set(cacheKey, cachedResponse, timeOut, onTimeout, depArrayValues);
 
 			onCacheEvent("STORED", cacheUrl);
-			onCacheEvent("RELEASING", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+			onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
 			emitter.emit(cacheKey, cachedResponse);
 		}
 
