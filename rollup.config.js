@@ -1,5 +1,5 @@
 import typescript from 'rollup-plugin-typescript2';
-import dts from 'rollup-plugin-dts';
+import {dts} from 'rollup-plugin-dts';
 
 export default [
 	// JavaScript Bundling
@@ -25,7 +25,7 @@ export default [
 	},
 	// Type Declarations Bundling
 	{
-		input: './build/index.d.ts', // Entry point for types
+		input: './src/index.ts', // Entry point for types
 		output: {
 			file: './types/index.d.ts', // Combined type output
 			format: 'es',

@@ -93,6 +93,13 @@ declare function hashString(str: string): string;
  */
 declare function expressCache(opts: ExpressCacheOptions): (req: Request<any>, res: Response<any>, next: NextFunction) => Promise<void>;
 
+interface ExpressCacheOptionsRequired extends Required<ExpressCacheOptions> {
+}
+
+interface RedisCacheConstructorOptions {
+    client?: RedisClientType<any>;
+}
+
 /**
  * MemoryCache class for caching data in memory.
  */
@@ -135,10 +142,6 @@ declare class MemoryCache implements CacheInterface {
      * @returns True if the dependencies have changed, otherwise false.
      */
     dependenciesChanged(key: string, depArrayValues: any[]): boolean;
-}
-
-interface RedisCacheConstructorOptions {
-    client?: RedisClientType<any>;
 }
 
 /**
@@ -185,4 +188,4 @@ declare class RedisCache implements CacheInterface {
     dependenciesChanged(key: string, depArrayValues: any[]): boolean;
 }
 
-export { MemoryCache, RedisCache, expressCache, hashString, inFlight };
+export { type CacheEvent, type CacheEventCallback, type CachedResponse, type ExpressCacheOptions, type ExpressCacheOptionsRequired, MemoryCache, RedisCache, type RedisCacheConstructorOptions, expressCache, hashString, inFlight };
