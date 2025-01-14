@@ -27,8 +27,8 @@ export class RedisCache implements CacheInterface {
 	 * @returns The cached value if found and not expired, otherwise null.
 	 */
 	async get(key: string, depArrayValues: any[] = []) {
-		if (!this.client.isOpen) {
-			// The redis connection is not open, return null
+		if (!this.client.isOpen || !this.client.isReady) {
+			// The redis connection is not open or ready, return null
 			// which will essentially signal no cache and regenerate the request
 			return null;
 		}
@@ -79,17 +79,17 @@ export class RedisCache implements CacheInterface {
 	 * @param onTimeout Callback function when the cache expires.
 	 * @param dependencies Dependency values for cache checking.
 	 */
-	async set(key: string, value: any, timeoutMs: number = 0, onTimeout: (key: string) => void = () => {}, dependencies: any[] = []): Promise<void> {
-		if (!this.client.isOpen) {
-			// The redis connection is not open, don't store anything
-			return;
+	async set(key: string, value: any, timeoutMs: number = 0, onTimeout: (key: string) => void = () => {}, dependencies: any[] = []): Promise<boolean> {
+		if (!this.client.isOpen || !this.client.isReady) {
+			// The redis connection is not open or ready, don't store anything
+			return false;
 		}
 
 		this.dependencies[key] = dependencies;
 
 		if (!timeoutMs) {
 			await this.client.set(key, JSON.stringify({value}));
-			return;
+			return true;
 		}
 
 		const expireTime = Date.now() + timeoutMs;
@@ -105,6 +105,8 @@ export class RedisCache implements CacheInterface {
 				this.remove(key);
 			}, timeoutMs);
 		}
+
+		return true;
 	}
 
 	/**

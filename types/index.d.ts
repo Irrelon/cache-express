@@ -17,7 +17,7 @@ interface CachedResponse {
  */
 interface CacheInterface {
     get: (key: string, depArrayValues: any[]) => Promise<CachedResponse | null>;
-    set: (key: string, value: CachedResponse, timeoutMs: number, callback: (key: string) => void, dependencies: any[]) => Promise<void>;
+    set: (key: string, value: CachedResponse, timeoutMs: number, callback: (key: string) => void, dependencies: any[]) => Promise<boolean>;
     has: (key: string) => Promise<boolean>;
     remove: (key: string) => Promise<void>;
 }
@@ -123,7 +123,7 @@ declare class MemoryCache implements CacheInterface {
      * @param callback Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    set(key: string, value: any, timeoutMs?: number, callback?: (key: string) => void, dependencies?: any[]): Promise<void>;
+    set(key: string, value: any, timeoutMs?: number, callback?: (key: string) => void, dependencies?: any[]): Promise<boolean>;
     /**
      * Checks if a key exists in the cache.
      * @param key The cache key to check.
@@ -167,7 +167,7 @@ declare class RedisCache implements CacheInterface {
      * @param onTimeout Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    set(key: string, value: any, timeoutMs?: number, onTimeout?: (key: string) => void, dependencies?: any[]): Promise<void>;
+    set(key: string, value: any, timeoutMs?: number, onTimeout?: (key: string) => void, dependencies?: any[]): Promise<boolean>;
     /**
      * Removes a value from the cache.
      * @param key The cache key to remove.

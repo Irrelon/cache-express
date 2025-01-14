@@ -50,14 +50,14 @@ export class MemoryCache implements CacheInterface {
 
 		if (!timeoutMs) {
 			this.cache[key] = {value, dependencies};
-			return;
+			return true;
 		}
 
 		const expireTime = Date.now() + timeoutMs;
 		this.cache[key] = {value, expireTime, dependencies, timeoutMs};
 
 		if (!callback) {
-			return;
+			return true;
 		}
 
 		this.timers[key] = setTimeout(() => {
@@ -66,6 +66,8 @@ export class MemoryCache implements CacheInterface {
 				this.remove(key);
 			}
 		}, timeoutMs);
+
+		return true;
 	}
 
 	/**

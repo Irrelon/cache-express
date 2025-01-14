@@ -135,7 +135,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 
 		inFlight[cacheKey] = true;
 
-		const storeCache = (bodyContent: string, isJson = false) => {
+		const storeCache = async (bodyContent: string, isJson = false) => {
 			delete inFlight[cacheKey];
 
 			// Check the status code before storing
@@ -149,9 +149,13 @@ export function expressCache(opts: ExpressCacheOptions) {
 				statusCode: res.statusCode
 			};
 
-			cache.set(cacheKey, cachedResponse, timeOut, onTimeout, depArrayValues);
+			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOut, onTimeout, depArrayValues);
+			if (cachedSuccessfully) {
+				onCacheEvent("STORED", cacheUrl);
+			} else {
+				onCacheEvent("NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
+			}
 
-			onCacheEvent("STORED", cacheUrl);
 			onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
 			emitter.emit(cacheKey, cachedResponse);
 		}

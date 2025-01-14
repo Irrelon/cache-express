@@ -106,7 +106,7 @@ function expressCache(opts) {
             return;
         }
         inFlight[cacheKey] = true;
-        const storeCache = (bodyContent, isJson = false) => {
+        const storeCache = async (bodyContent, isJson = false) => {
             delete inFlight[cacheKey];
             // Check the status code before storing
             if (!cacheStatusCode(res.statusCode)) {
@@ -117,8 +117,13 @@ function expressCache(opts) {
                 headers: JSON.stringify(res.getHeaders()),
                 statusCode: res.statusCode
             };
-            cache.set(cacheKey, cachedResponse, timeOut, onTimeout, depArrayValues);
-            onCacheEvent("STORED", cacheUrl);
+            const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOut, onTimeout, depArrayValues);
+            if (cachedSuccessfully) {
+                onCacheEvent("STORED", cacheUrl);
+            }
+            else {
+                onCacheEvent("NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
+            }
             onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
             emitter.emit(cacheKey, cachedResponse);
         };
@@ -179,12 +184,12 @@ class MemoryCache {
         this.dependencies[key] = dependencies;
         if (!timeoutMs) {
             this.cache[key] = { value, dependencies };
-            return;
+            return true;
         }
         const expireTime = Date.now() + timeoutMs;
         this.cache[key] = { value, expireTime, dependencies, timeoutMs };
         if (!callback) {
-            return;
+            return true;
         }
         this.timers[key] = setTimeout(() => {
             if (this.cache[key]) {
@@ -192,6 +197,7 @@ class MemoryCache {
                 this.remove(key);
             }
         }, timeoutMs);
+        return true;
     }
     /**
      * Checks if a key exists in the cache.
@@ -255,8 +261,8 @@ class RedisCache {
      * @returns The cached value if found and not expired, otherwise null.
      */
     async get(key, depArrayValues = []) {
-        if (!this.client.isOpen) {
-            // The redis connection is not open, return null
+        if (!this.client.isOpen || !this.client.isReady) {
+            // The redis connection is not open or ready, return null
             // which will essentially signal no cache and regenerate the request
             return null;
         }
@@ -299,14 +305,14 @@ class RedisCache {
      * @param dependencies Dependency values for cache checking.
      */
     async set(key, value, timeoutMs = 0, onTimeout = () => { }, dependencies = []) {
-        if (!this.client.isOpen) {
-            // The redis connection is not open, don't store anything
-            return;
+        if (!this.client.isOpen || !this.client.isReady) {
+            // The redis connection is not open or ready, don't store anything
+            return false;
         }
         this.dependencies[key] = dependencies;
         if (!timeoutMs) {
             await this.client.set(key, JSON.stringify({ value }));
-            return;
+            return true;
         }
         const expireTime = Date.now() + timeoutMs;
         const expireAt = new Date(expireTime).toISOString();
@@ -320,6 +326,7 @@ class RedisCache {
                 this.remove(key);
             }, timeoutMs);
         }
+        return true;
     }
     /**
      * Removes a value from the cache.
