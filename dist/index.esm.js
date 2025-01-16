@@ -1,6 +1,10 @@
 import { Emitter } from '@irrelon/emitter';
 
 const emitter = new Emitter();
+/**
+ * A map of keys and booleans to determine if a particular request (represented
+ * by a cache key string) is currently being processed / loaded or not.
+ */
 const inFlight = {};
 /**
  * Hashes a string to create a unique cache key.
@@ -63,7 +67,8 @@ function expressCache(opts) {
         provideCacheKey: (cacheUrl) => {
             return "c_" + hashString(cacheUrl);
         },
-        compression: false
+        compression: false,
+        pooling: true
     };
     const options = {
         ...defaults,
@@ -72,24 +77,24 @@ function expressCache(opts) {
     const { dependsOn, timeOut, onTimeout, onCacheEvent, cacheStatusCode, provideCacheKey, cache } = options;
     return async function (req, res, next) {
         const cacheUrl = req.originalUrl || req.url;
-        const isNoCacheHeaderPresent = hasNoCacheHeader(req);
+        const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
         // @ts-expect-error cacheHash is a legit key
         const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
         const depArrayValues = dependsOn();
         const cachedResponse = await cache.get(cacheKey, depArrayValues);
         const missReasons = [];
-        if (isNoCacheHeaderPresent) {
+        if (isDisableCacheHeaderPresent) {
             missReasons.push("CACHE_CONTROL_HEADER");
         }
         if (!cachedResponse) {
-            if (inFlight[cacheKey]) {
+            if (options.pooling && inFlight[cacheKey]) {
                 missReasons.push(`RESPONSE_POOLED: ${getPoolSize(cacheKey) + 1}`);
             }
             else {
                 missReasons.push("RESPONSE_NOT_IN_CACHE");
             }
         }
-        if (!isNoCacheHeaderPresent && cachedResponse) {
+        if (!isDisableCacheHeaderPresent && cachedResponse) {
             onCacheEvent("HIT", cacheUrl);
             respondWithCachedResponse(cachedResponse, res);
             return;
@@ -98,16 +103,21 @@ function expressCache(opts) {
         const originalSend = res.send;
         const originalJson = res.json;
         // Check if there is a pool for this cacheKey
-        if (!isNoCacheHeaderPresent && inFlight[cacheKey]) {
+        if (!isDisableCacheHeaderPresent && options.pooling && inFlight[cacheKey]) {
             // We already have a request in flight for this resource, hook the event handler
             emitter.once(cacheKey, (cachedResponse) => {
+                // The event was fired indicating we have a response to the request
                 respondWithCachedResponse(cachedResponse, res);
             });
             return;
         }
-        inFlight[cacheKey] = true;
+        if (options.pooling) {
+            inFlight[cacheKey] = true;
+        }
         const storeCache = async (bodyContent, isJson = false) => {
-            delete inFlight[cacheKey];
+            if (options.pooling) {
+                delete inFlight[cacheKey];
+            }
             // Check the status code before storing
             if (!cacheStatusCode(res.statusCode)) {
                 return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
@@ -124,7 +134,9 @@ function expressCache(opts) {
             else {
                 onCacheEvent("NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
             }
-            onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+            if (options.pooling) {
+                onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+            }
             emitter.emit(cacheKey, cachedResponse);
         };
         res.send = function (body) {
@@ -218,6 +230,7 @@ class MemoryCache {
         }
         delete this.cache[key];
         delete this.dependencies[key];
+        return true;
     }
     /**
      * Checks if the dependencies have changed.
@@ -323,7 +336,6 @@ class RedisCache {
         if (onTimeout) {
             this.timers[key] = setTimeout(() => {
                 onTimeout(key);
-                this.remove(key);
             }, timeoutMs);
         }
         return true;
@@ -338,9 +350,12 @@ class RedisCache {
             delete this.timers[key];
         }
         delete this.dependencies[key];
-        if (!this.client.isOpen)
-            return;
+        if (!this.client.isOpen || !this.client.isReady) {
+            // The redis connection is not open or ready, don't remove anything
+            return false;
+        }
         await this.client.del(key);
+        return true;
     }
     /**
      * Checks if a key exists in the cache.

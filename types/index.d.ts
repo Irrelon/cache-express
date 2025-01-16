@@ -19,7 +19,7 @@ interface CacheInterface {
     get: (key: string, depArrayValues: any[]) => Promise<CachedResponse | null>;
     set: (key: string, value: CachedResponse, timeoutMs: number, callback: (key: string) => void, dependencies: any[]) => Promise<boolean>;
     has: (key: string) => Promise<boolean>;
-    remove: (key: string) => Promise<void>;
+    remove: (key: string) => Promise<boolean>;
 }
 
 type CacheEvent = "MISS" | "HIT" | "STORED" | "NOT_STORED" | "POOL_SEND";
@@ -73,8 +73,17 @@ interface ExpressCacheOptions {
      * it in the cache system. Defaults to false.
      */
     compression?: boolean;
+    /**
+     * Flag indicating if connection pooling should be enabled or not.
+     * Defaults to true.
+     */
+    pooling?: boolean;
 }
 
+/**
+ * A map of keys and booleans to determine if a particular request (represented
+ * by a cache key string) is currently being processed / loaded or not.
+ */
 declare const inFlight: Record<string, boolean>;
 /**
  * Hashes a string to create a unique cache key.
@@ -134,7 +143,7 @@ declare class MemoryCache implements CacheInterface {
      * Removes a value from the cache.
      * @param key The cache key to remove.
      */
-    remove(key: string): Promise<void>;
+    remove(key: string): Promise<boolean>;
     /**
      * Checks if the dependencies have changed.
      * @param key The cache key.
@@ -172,7 +181,7 @@ declare class RedisCache implements CacheInterface {
      * Removes a value from the cache.
      * @param key The cache key to remove.
      */
-    remove(key: string): Promise<void>;
+    remove(key: string): Promise<boolean>;
     /**
      * Checks if a key exists in the cache.
      * @param key The cache key to check.
