@@ -6,6 +6,10 @@ import type {ExpressCacheOptionsRequired} from "./types/ExpressCacheOptionsRequi
 
 const emitter = new Emitter();
 
+/**
+ * A map of keys and booleans to determine if a particular request (represented
+ * by a cache key string) is currently being processed / loaded or not.
+ */
 export const inFlight: Record<string, boolean> = {};
 
 /**
@@ -75,7 +79,8 @@ export function expressCache(opts: ExpressCacheOptions) {
 		provideCacheKey: (cacheUrl: string) => {
 			return "c_" + hashString(cacheUrl);
 		},
-		compression: false
+		compression: false,
+		pooling: true
 	};
 
 	const options: ExpressCacheOptionsRequired = {
@@ -95,26 +100,26 @@ export function expressCache(opts: ExpressCacheOptions) {
 
 	return async function (req: Request<any>, res: Response<any>, next: NextFunction) {
 		const cacheUrl = req.originalUrl || req.url;
-		const isNoCacheHeaderPresent = hasNoCacheHeader(req);
+		const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
 		// @ts-expect-error cacheHash is a legit key
 		const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
 		const depArrayValues = dependsOn();
 		const cachedResponse = await cache.get(cacheKey, depArrayValues);
 		const missReasons = [];
 
-		if (isNoCacheHeaderPresent) {
+		if (isDisableCacheHeaderPresent) {
 			missReasons.push("CACHE_CONTROL_HEADER");
 		}
 
 		if (!cachedResponse) {
-			if (inFlight[cacheKey]) {
+			if (options.pooling && inFlight[cacheKey]) {
 				missReasons.push(`RESPONSE_POOLED: ${getPoolSize(cacheKey) + 1}`);
 			} else {
 				missReasons.push("RESPONSE_NOT_IN_CACHE");
 			}
 		}
 
-		if (!isNoCacheHeaderPresent && cachedResponse) {
+		if (!isDisableCacheHeaderPresent && cachedResponse) {
 			onCacheEvent("HIT", cacheUrl);
 			respondWithCachedResponse(cachedResponse, res);
 			return;
@@ -125,18 +130,23 @@ export function expressCache(opts: ExpressCacheOptions) {
 		const originalJson = res.json;
 
 		// Check if there is a pool for this cacheKey
-		if (!isNoCacheHeaderPresent && inFlight[cacheKey]) {
+		if (!isDisableCacheHeaderPresent && options.pooling && inFlight[cacheKey]) {
 			// We already have a request in flight for this resource, hook the event handler
 			emitter.once(cacheKey, (cachedResponse) => {
+				// The event was fired indicating we have a response to the request
 				respondWithCachedResponse(cachedResponse, res);
 			});
 			return;
 		}
 
-		inFlight[cacheKey] = true;
+		if (options.pooling) {
+			inFlight[cacheKey] = true;
+		}
 
 		const storeCache = async (bodyContent: string, isJson = false) => {
-			delete inFlight[cacheKey];
+			if (options.pooling) {
+				delete inFlight[cacheKey];
+			}
 
 			// Check the status code before storing
 			if (!cacheStatusCode(res.statusCode)) {
@@ -156,7 +166,10 @@ export function expressCache(opts: ExpressCacheOptions) {
 				onCacheEvent("NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
 			}
 
-			onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+			if (options.pooling) {
+				onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+			}
+
 			emitter.emit(cacheKey, cachedResponse);
 		}
 

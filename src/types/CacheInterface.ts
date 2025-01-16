@@ -8,5 +8,5 @@ export interface CacheInterface {
 	get: (key: string, depArrayValues: any[]) => Promise<CachedResponse | null>;
 	set: (key: string, value: CachedResponse, timeoutMs: number, callback: (key: string) => void, dependencies: any[]) => Promise<boolean>;
 	has: (key: string) => Promise<boolean>;
-	remove: (key: string) => Promise<void>;
+	remove: (key: string) => Promise<boolean>;
 }

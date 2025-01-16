@@ -44,4 +44,9 @@ export interface ExpressCacheOptions {
 	 * it in the cache system. Defaults to false.
 	 */
 	compression?: boolean;
+	/**
+	 * Flag indicating if connection pooling should be enabled or not.
+	 * Defaults to true.
+	 */
+	pooling?: boolean;
 }

@@ -36,11 +36,14 @@ app.get(
 
 ### Redis Cache
 ```typescript
+import {createClient} from "redis";
 import express from "express";
 import {expressCache, RedisCache} from "@irrelon/cache-express";
 
+const redisClient = createClient({url: "redis://localhost:6380"});
+
 const app = express();
-const redisCache = new RedisCache("redis://localhost:6380");
+const redisCache = new RedisCache({client: redisClient});
 
 // Apply the caching middleware to a route
 app.get(

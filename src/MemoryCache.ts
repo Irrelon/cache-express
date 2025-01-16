@@ -91,6 +91,7 @@ export class MemoryCache implements CacheInterface {
 
 		delete this.cache[key];
 		delete this.dependencies[key];
+		return true;
 	}
 
 	/**

@@ -102,7 +102,6 @@ export class RedisCache implements CacheInterface {
 		if (onTimeout) {
 			this.timers[key] = setTimeout(() => {
 				onTimeout(key);
-				this.remove(key);
 			}, timeoutMs);
 		}
 
@@ -118,10 +117,16 @@ export class RedisCache implements CacheInterface {
 			clearTimeout(this.timers[key]);
 			delete this.timers[key];
 		}
+
 		delete this.dependencies[key];
 
-		if (!this.client.isOpen) return;
+		if (!this.client.isOpen || !this.client.isReady) {
+			// The redis connection is not open or ready, don't remove anything
+			return false;
+		}
+
 		await this.client.del(key);
+		return true;
 	}
 
 	/**
