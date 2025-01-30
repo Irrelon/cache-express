@@ -75,11 +75,11 @@ export class RedisCache implements CacheInterface {
 	 * Sets a value in the cache with an optional timeout and callback.
 	 * @param key The cache key.
 	 * @param value The value to cache.
-	 * @param timeoutMs Timeout in milliseconds.
+	 * @param timeoutMins Timeout in minutes.
 	 * @param onTimeout Callback function when the cache expires.
 	 * @param dependencies Dependency values for cache checking.
 	 */
-	async set(key: string, value: any, timeoutMs: number = 0, onTimeout: (key: string) => void = () => {}, dependencies: any[] = []): Promise<boolean> {
+	async set(key: string, value: any, timeoutMins: number = 0, onTimeout: (key: string) => void = () => {}, dependencies: any[] = []): Promise<boolean> {
 		if (!this.client.isOpen || !this.client.isReady) {
 			// The redis connection is not open or ready, don't store anything
 			return false;
@@ -87,23 +87,18 @@ export class RedisCache implements CacheInterface {
 
 		this.dependencies[key] = dependencies;
 
-		if (!timeoutMs) {
+		if (!timeoutMins) {
 			await this.client.set(key, JSON.stringify({value}));
 			return true;
 		}
 
+		const timeoutMs = timeoutMins * 60000;
 		const expireTime = Date.now() + timeoutMs;
 		const expireAt = new Date(expireTime).toISOString();
 		await this.client.set(key, JSON.stringify({
 			value,
 			expireAt,
 		}), {PXAT: expireTime});
-
-		if (onTimeout) {
-			this.timers[key] = setTimeout(() => {
-				onTimeout(key);
-			}, timeoutMs);
-		}
 
 		return true;
 	}

@@ -41,20 +41,28 @@ export class MemoryCache implements CacheInterface {
 	 * Sets a value in the cache with an optional timeout and callback.
 	 * @param key The cache key.
 	 * @param value The value to cache.
-	 * @param timeoutMs Timeout in milliseconds.
+	 * @param timeoutMins Timeout in minutes.
 	 * @param callback Callback function when the cache expires.
 	 * @param dependencies Dependency values for cache checking.
 	 */
-	async set(key: string, value: any, timeoutMs: number = 0, callback: (key: string) => void = () => {}, dependencies: any[] = []) {
+	async set(key: string, value: any, timeoutMins: number = 0, callback: (key: string) => void = () => {}, dependencies: any[] = []) {
 		this.dependencies[key] = dependencies;
 
-		if (!timeoutMs) {
+		if (!timeoutMins) {
 			this.cache[key] = {value, dependencies};
 			return true;
 		}
 
-		const expireTime = Date.now() + timeoutMs;
-		this.cache[key] = {value, expireTime, dependencies, timeoutMs};
+		const timeoutMs = timeoutMins * 60000;
+		const expireTime = Date.now() + (timeoutMs);
+
+		// Check if the timeout is greater than the max 32-bit signed integer value
+		// that setTimeout accepts
+		if (timeoutMs > 0x7FFFFFFF) {
+			throw new Error("Timeout cannot be greater than 2147483647ms");
+		}
+
+		this.cache[key] = {value, expireTime, dependencies, timeoutMins};
 
 		if (!callback) {
 			return true;

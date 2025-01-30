@@ -82,7 +82,7 @@ app.get(
 	"/api/data",
 	expressCache({
 		dependsOn: () => [getUserID()],
-		timeOut: 60000, // Cache for 1 minute
+		timeOutMins: 1, // Cache for 1 minute
 		onTimeout: (key, value) => {
 			console.log(`Cache removed for key: ${key}`);
 		},
@@ -97,7 +97,7 @@ app.get(
 //Or you can create a middleWare configuration beforehand:
 let postsCache = expressCache({
 	dependsOn: () => [postCount],
-	timeOut: 40000,
+	timeOutMins: 1,
 	onTimeout: () => {
 		console.log(`Posts changed, cache removed`);
 	},
@@ -150,7 +150,7 @@ app.get(
    app.get(
    	"/api/data",
    	expressCache({
-   		timeOut: 60000, // Cache for 1 minute
+   		timeOutMins: 1, // Cache for 1 minute
    		onTimeout: (key, value) => {
    			console.log(`Cache removed for key: ${key}`);
    		},

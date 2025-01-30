@@ -68,7 +68,7 @@ function getPoolSize (cacheKey: string) {
 export function expressCache(opts: ExpressCacheOptions) {
 	const defaults: Omit<ExpressCacheOptionsRequired, "cache"> = {
 		dependsOn: () => [],
-		timeOut: 60 * 60 * 1000,
+		timeOutMins: 60,
 		onTimeout: () => {
 			console.log("Cache removed");
 		},
@@ -90,7 +90,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 
 	const {
 		dependsOn,
-		timeOut,
+		timeOutMins,
 		onTimeout,
 		onCacheEvent,
 		cacheStatusCode,
@@ -159,7 +159,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 				statusCode: res.statusCode
 			};
 
-			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOut, onTimeout, depArrayValues);
+			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins, onTimeout, depArrayValues);
 			if (cachedSuccessfully) {
 				onCacheEvent("STORED", cacheUrl);
 			} else {

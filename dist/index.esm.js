@@ -56,7 +56,7 @@ function getPoolSize(cacheKey) {
 function expressCache(opts) {
     const defaults = {
         dependsOn: () => [],
-        timeOut: 60 * 60 * 1000,
+        timeOutMins: 60,
         onTimeout: () => {
             console.log("Cache removed");
         },
@@ -74,7 +74,7 @@ function expressCache(opts) {
         ...defaults,
         ...opts,
     };
-    const { dependsOn, timeOut, onTimeout, onCacheEvent, cacheStatusCode, provideCacheKey, cache } = options;
+    const { dependsOn, timeOutMins, onTimeout, onCacheEvent, cacheStatusCode, provideCacheKey, cache } = options;
     return async function (req, res, next) {
         const cacheUrl = req.originalUrl || req.url;
         const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
@@ -127,7 +127,7 @@ function expressCache(opts) {
                 headers: JSON.stringify(res.getHeaders()),
                 statusCode: res.statusCode
             };
-            const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOut, onTimeout, depArrayValues);
+            const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins, onTimeout, depArrayValues);
             if (cachedSuccessfully) {
                 onCacheEvent("STORED", cacheUrl);
             }
@@ -188,18 +188,24 @@ class MemoryCache {
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
-     * @param timeoutMs Timeout in milliseconds.
+     * @param timeoutMins Timeout in minutes.
      * @param callback Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    async set(key, value, timeoutMs = 0, callback = () => { }, dependencies = []) {
+    async set(key, value, timeoutMins = 0, callback = () => { }, dependencies = []) {
         this.dependencies[key] = dependencies;
-        if (!timeoutMs) {
+        if (!timeoutMins) {
             this.cache[key] = { value, dependencies };
             return true;
         }
-        const expireTime = Date.now() + timeoutMs;
-        this.cache[key] = { value, expireTime, dependencies, timeoutMs };
+        const timeoutMs = timeoutMins * 60000;
+        const expireTime = Date.now() + (timeoutMs);
+        // Check if the timeout is greater than the max 32-bit signed integer value
+        // that setTimeout accepts
+        if (timeoutMs > 0x7FFFFFFF) {
+            throw new Error("Timeout cannot be greater than 2147483647ms");
+        }
+        this.cache[key] = { value, expireTime, dependencies, timeoutMins };
         if (!callback) {
             return true;
         }
@@ -313,31 +319,27 @@ class RedisCache {
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
-     * @param timeoutMs Timeout in milliseconds.
+     * @param timeoutMins Timeout in minutes.
      * @param onTimeout Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    async set(key, value, timeoutMs = 0, onTimeout = () => { }, dependencies = []) {
+    async set(key, value, timeoutMins = 0, onTimeout = () => { }, dependencies = []) {
         if (!this.client.isOpen || !this.client.isReady) {
             // The redis connection is not open or ready, don't store anything
             return false;
         }
         this.dependencies[key] = dependencies;
-        if (!timeoutMs) {
+        if (!timeoutMins) {
             await this.client.set(key, JSON.stringify({ value }));
             return true;
         }
+        const timeoutMs = timeoutMins * 60000;
         const expireTime = Date.now() + timeoutMs;
         const expireAt = new Date(expireTime).toISOString();
         await this.client.set(key, JSON.stringify({
             value,
             expireAt,
         }), { PXAT: expireTime });
-        if (onTimeout) {
-            this.timers[key] = setTimeout(() => {
-                onTimeout(key);
-            }, timeoutMs);
-        }
         return true;
     }
     /**

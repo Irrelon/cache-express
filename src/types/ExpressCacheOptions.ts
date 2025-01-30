@@ -12,9 +12,9 @@ export interface ExpressCacheOptions {
 	 */
 	dependsOn?: () => any[];
 	/**
-	 * Timeout in milliseconds for cache expiration. Default is 1 hour (3600000 ms).
+	 * Timeout in minutes for cache expiration. Default is 1 hour (60 mins).
 	 */
-	timeOut?: number;
+	timeOutMins?: number;
 	/**
 	 * A callback function to execute when a cached item expires.
 	 * @param key The key that timed out.

@@ -17,7 +17,7 @@ interface CachedResponse {
  */
 interface CacheInterface {
     get: (key: string, depArrayValues: any[]) => Promise<CachedResponse | null>;
-    set: (key: string, value: CachedResponse, timeoutMs: number, callback: (key: string) => void, dependencies: any[]) => Promise<boolean>;
+    set: (key: string, value: CachedResponse, timeoutMins: number, callback: (key: string) => void, dependencies: any[]) => Promise<boolean>;
     has: (key: string) => Promise<boolean>;
     remove: (key: string) => Promise<boolean>;
 }
@@ -41,9 +41,9 @@ interface ExpressCacheOptions {
      */
     dependsOn?: () => any[];
     /**
-     * Timeout in milliseconds for cache expiration. Default is 1 hour (3600000 ms).
+     * Timeout in minutes for cache expiration. Default is 1 hour (60 mins).
      */
-    timeOut?: number;
+    timeOutMins?: number;
     /**
      * A callback function to execute when a cached item expires.
      * @param key The key that timed out.
@@ -128,11 +128,11 @@ declare class MemoryCache implements CacheInterface {
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
-     * @param timeoutMs Timeout in milliseconds.
+     * @param timeoutMins Timeout in minutes.
      * @param callback Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    set(key: string, value: any, timeoutMs?: number, callback?: (key: string) => void, dependencies?: any[]): Promise<boolean>;
+    set(key: string, value: any, timeoutMins?: number, callback?: (key: string) => void, dependencies?: any[]): Promise<boolean>;
     /**
      * Checks if a key exists in the cache.
      * @param key The cache key to check.
@@ -172,11 +172,11 @@ declare class RedisCache implements CacheInterface {
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
-     * @param timeoutMs Timeout in milliseconds.
+     * @param timeoutMins Timeout in minutes.
      * @param onTimeout Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    set(key: string, value: any, timeoutMs?: number, onTimeout?: (key: string) => void, dependencies?: any[]): Promise<boolean>;
+    set(key: string, value: any, timeoutMins?: number, onTimeout?: (key: string) => void, dependencies?: any[]): Promise<boolean>;
     /**
      * Removes a value from the cache.
      * @param key The cache key to remove.
