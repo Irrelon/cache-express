@@ -57,12 +57,13 @@ function expressCache(opts) {
     const defaults = {
         dependsOn: () => [],
         timeOutMins: 60,
+        shouldCache: (req, res) => {
+            return res.statusCode >= 200 && res.statusCode < 400;
+        },
         onTimeout: () => {
             console.log("Cache removed");
         },
-        onCacheEvent: () => { },
-        cacheStatusCode: (statusCode) => {
-            return statusCode >= 200 && statusCode < 400;
+        onCacheEvent: () => {
         },
         provideCacheKey: (cacheUrl) => {
             return "c_" + hashString(cacheUrl);
@@ -72,9 +73,9 @@ function expressCache(opts) {
     };
     const options = {
         ...defaults,
-        ...opts,
+        ...opts
     };
-    const { dependsOn, timeOutMins, onTimeout, onCacheEvent, cacheStatusCode, provideCacheKey, cache } = options;
+    const { dependsOn, timeOutMins, onTimeout, onCacheEvent, shouldCache, provideCacheKey, cache } = options;
     return async function (req, res, next) {
         const cacheUrl = req.originalUrl || req.url;
         const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
@@ -119,7 +120,11 @@ function expressCache(opts) {
                 delete inFlight[cacheKey];
             }
             // Check the status code before storing
-            if (!cacheStatusCode(res.statusCode)) {
+            const shouldCacheResult = shouldCache(req, res);
+            if (shouldCacheResult !== true) {
+                if (typeof shouldCacheResult === "string") {
+                    return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}), ${shouldCacheResult}`);
+                }
                 return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
             }
             const cachedResponse = {

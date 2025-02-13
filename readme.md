@@ -10,7 +10,7 @@ npm install @irrelon/cache-express
 ```
 
 ## Usage
-Add the expressCache() function before your route handler function.
+Add the `expressCache()` function before your route handler function.
 
 ### In Memory Cache
 ```typescript
@@ -61,15 +61,9 @@ app.get(
 
 ### Options
 
-The Express Cache Middleware provides several configuration options to tailor caching behavior to your specific needs:
+See the [ExpressCacheOptions.ts](src/types/ExpressCacheOptions.ts) type which describes the options available.
 
-- **`dependsOn` (optional, default: `() => []`)**: A function that returns an array of dependency values for cache checking. When any of these dependencies change, the cache for the associated route will be invalidated and refreshed.
-
-- **`timeOut` (optional, default: `1 hour`)**: Specifies the cache timeout in milliseconds. This determines how long a cached response remains valid before it's considered expired and refreshed. If Dependency array changes, this timing will be resetted.
-
-- **`onTimeout` (optional, default: `() => { console.log("Cache removed"); }`)**: An optional callback function that executes when a cached item expires and is removed from the cache. Use this for custom cache expiration handling.
-
-### Example Usage
+#### Example Usage
 
 ```javascript
 import express from "express";
@@ -94,7 +88,7 @@ app.get(
 	}
 );
 
-//Or you can create a middleWare configuration beforehand:
+// Or you can create a middleWare configuration beforehand:
 let postsCache = expressCache({
 	dependsOn: () => [postCount],
 	timeOutMins: 1,
@@ -103,7 +97,7 @@ let postsCache = expressCache({
 	},
 });
 
-//then use it in route.
+// Then use it in route.
 app.get("/api/posts", postsCache, (req, res) => {
 	//...
 	res.send("");
@@ -114,9 +108,13 @@ app.listen(3000, () => {
 });
 ```
 
-**Dependency-Based Cache Invalidation:**
+### Dependency-Based Cache Invalidation
 
-The middleware supports dependency-based cache invalidation. You can specify dependencies for your cached data, and the cache will be automatically invalidated if any of the dependencies change. This dependsOn should be **function which returns** an array that includes dependencies.
+The middleware supports dependency-based cache invalidation.
+You can specify dependencies for your cached data, and the
+cache will be automatically invalidated if any of the
+dependencies change. `dependsOn` should be a function
+that returns an array including your dependency values.
 
 ```javascript
 app.get(
@@ -127,7 +125,7 @@ app.get(
 );
 ```
 
-**Examples:**
+#### Examples
 
 1. Basic Usage:
 

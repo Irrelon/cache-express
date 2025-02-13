@@ -1,6 +1,5 @@
-import type {CacheInterface} from "./CacheInterface";
-import type {CacheEventCallback} from "./CacheEventCallback";
-import type {Request} from "express";
+import type {CacheEventCallback, CacheInterface} from "./index";
+import type {Request, Response} from "express";
 
 export interface ExpressCacheOptions {
 	/**
@@ -25,12 +24,15 @@ export interface ExpressCacheOptions {
 	 */
 	onCacheEvent?: CacheEventCallback;
 	/**
-	 * Provide this callback function to fine-control which request
-	 * status codes should be cached.
-	 * @param statusCode The status code of the current request.
-	 * @returns True if the request should be cached or false if not.
+	 * Provide this callback function to fine-control which requests
+	 * should be cached.
+	 * @param {Request} req The current request.
+	 * @param {Response} res The current response.
+	 * @returns Boolean true if the request should be cached or false if not.
+	 * You can also return a string explaining why this should not be cached,
+	 * and it will be added to the reasons for the NOT_STORED event.
 	 */
-	cacheStatusCode?: (statusCode: number) => boolean;
+	shouldCache?: (req: Request, res: Response) => boolean | string;
 	/**
 	 * Provide this callback to generate your own cache keys from
 	 * url / request data. This allows you to decide what request

@@ -1,8 +1,6 @@
 import {Emitter} from "@irrelon/emitter";
 import type {NextFunction, Request, Response} from "express";
-import type {CachedResponse} from "./types/CachedResponse";
-import type {ExpressCacheOptions} from "./types/ExpressCacheOptions";
-import type {ExpressCacheOptionsRequired} from "./types/ExpressCacheOptionsRequired";
+import type {CachedResponse, ExpressCacheOptions, ExpressCacheOptionsRequired} from "./types";
 
 const emitter = new Emitter();
 
@@ -17,7 +15,7 @@ export const inFlight: Record<string, boolean> = {};
  * @param str The input string to be hashed.
  * @returns The generated hash value.
  */
-export function hashString(str: string): string {
+export function hashString (str: string): string {
 	let hash = 0;
 	for (let i = 0; i < str.length; i++) {
 		const charCode = str.charCodeAt(i);
@@ -26,7 +24,7 @@ export function hashString(str: string): string {
 	return (hash + 2147483647 + 1).toString();
 }
 
-function hasNoCacheHeader  (req: Request) {
+function hasNoCacheHeader (req: Request) {
 	return req.get("Cache-Control") === "no-cache";
 }
 
@@ -65,16 +63,17 @@ function getPoolSize (cacheKey: string) {
  * @param opts Options for caching.
  * @returns Middleware function.
  */
-export function expressCache(opts: ExpressCacheOptions) {
+export function expressCache (opts: ExpressCacheOptions) {
 	const defaults: Omit<ExpressCacheOptionsRequired, "cache"> = {
 		dependsOn: () => [],
 		timeOutMins: 60,
+		shouldCache: (req, res): boolean => {
+			return res.statusCode >= 200 && res.statusCode < 400;
+		},
 		onTimeout: () => {
 			console.log("Cache removed");
 		},
-		onCacheEvent: () => {},
-		cacheStatusCode: (statusCode: number) => {
-			return statusCode >= 200 && statusCode < 400;
+		onCacheEvent: () => {
 		},
 		provideCacheKey: (cacheUrl: string) => {
 			return "c_" + hashString(cacheUrl);
@@ -85,7 +84,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 
 	const options: ExpressCacheOptionsRequired = {
 		...defaults,
-		...opts,
+		...opts
 	};
 
 	const {
@@ -93,7 +92,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 		timeOutMins,
 		onTimeout,
 		onCacheEvent,
-		cacheStatusCode,
+		shouldCache,
 		provideCacheKey,
 		cache
 	} = options;
@@ -149,7 +148,12 @@ export function expressCache(opts: ExpressCacheOptions) {
 			}
 
 			// Check the status code before storing
-			if (!cacheStatusCode(res.statusCode)) {
+			const shouldCacheResult = shouldCache(req, res);
+			if (shouldCacheResult !== true) {
+				if (typeof shouldCacheResult === "string") {
+					return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}), ${shouldCacheResult}`);
+				}
+
 				return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
 			}
 
@@ -171,7 +175,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 			}
 
 			emitter.emit(cacheKey, cachedResponse);
-		}
+		};
 
 		res.send = function (body) {
 			storeCache(body, typeof body === "object");
@@ -180,7 +184,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 		};
 
 		res.json = function (body) {
-			storeCache(body, true)
+			storeCache(body, true);
 			originalJson.call(this, body);
 			return res;
 		};
