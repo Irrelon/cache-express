@@ -97,7 +97,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 		cache
 	} = options;
 
-	return async function (req: Request<any>, res: Response<any>, next: NextFunction) {
+	return async function (req: Request, res: Response, next: NextFunction) {
 		const cacheUrl = req.originalUrl || req.url;
 		const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
 		// @ts-expect-error cacheHash is a legit key
@@ -151,7 +151,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 			const shouldCacheResult = shouldCache(req, res);
 			if (shouldCacheResult !== true) {
 				if (typeof shouldCacheResult === "string") {
-					return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}), ${shouldCacheResult}`);
+					return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
 				}
 
 				return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
