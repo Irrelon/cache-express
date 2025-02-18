@@ -143,21 +143,27 @@ export function expressCache (opts: ExpressCacheOptions) {
 			inFlight[cacheKey] = true;
 		}
 
-		const storeCache = async (bodyContent: string, isJson = false) => {
-			if (options.pooling) {
-				delete inFlight[cacheKey];
-			}
-
-			const uncachedResponse: CachedResponse = {
+		const resolvePool = (bodyContent: string, isJson = false) => {
+			const finalResponse: CachedResponse = {
 				body: isJson ? JSON.stringify(bodyContent) : bodyContent,
 				headers: JSON.stringify(res.getHeaders()),
 				statusCode: res.statusCode
 			};
 
+			if (options.pooling) {
+				delete inFlight[cacheKey];
+				onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+			}
+
+			emitter.emit(cacheKey, finalResponse);
+		}
+
+		const storeCache = async (bodyContent: string, isJson = false) => {
 			// Check the status code before storing
 			const shouldCacheResult = shouldCache(req, res);
 			if (shouldCacheResult !== true) {
-				emitter.emit(cacheKey, uncachedResponse);
+				resolvePool(bodyContent, isJson);
+
 				if (typeof shouldCacheResult === "string") {
 					return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
 				}
@@ -172,17 +178,14 @@ export function expressCache (opts: ExpressCacheOptions) {
 			};
 
 			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins(req), onTimeout, depArrayValues);
+
 			if (cachedSuccessfully) {
 				onCacheEvent("STORED", cacheUrl);
 			} else {
 				onCacheEvent("NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
 			}
 
-			if (options.pooling) {
-				onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
-			}
-
-			emitter.emit(cacheKey, cachedResponse);
+			resolvePool(bodyContent, isJson);
 		};
 
 		res.send = function (body) {
