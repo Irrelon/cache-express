@@ -83,6 +83,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 		provideCacheKey: (cacheUrl: string) => {
 			return "c_" + hashString(cacheUrl);
 		},
+		requestTimeoutMs: 20000,
 		compression: false,
 		pooling: true
 	};
@@ -99,6 +100,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 		onCacheEvent,
 		shouldCache,
 		provideCacheKey,
+		requestTimeoutMs,
 		cache
 	} = options;
 
@@ -149,10 +151,10 @@ export function expressCache (opts: ExpressCacheOptions) {
 					status: 504,
 					err: {
 						key: "REQUEST_TIMEOUT",
-						msg: "Request timed out"
+						msg: "Request timed out waiting for the route handler to respond"
 					}
 				});
-			}, 20000);
+			}, requestTimeoutMs);
 
 			// Emit the event to resolve the pool
 			emitter.once(cacheKey, respondHandler);
