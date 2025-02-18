@@ -1,6 +1,8 @@
 import {Emitter} from "@irrelon/emitter";
 import type {NextFunction, Request, Response} from "express";
 import type {CachedResponse, ExpressCacheOptions, ExpressCacheOptionsRequired} from "./types";
+import type {ExtendedRequest} from "./types/ExtendedRequest";
+import type {OutgoingHttpHeaders} from "node:http";
 
 const emitter = new Emitter();
 
@@ -66,7 +68,7 @@ function getPoolSize (cacheKey: string) {
 export function expressCache (opts: ExpressCacheOptions) {
 	const defaults: Omit<ExpressCacheOptionsRequired, "cache"> = {
 		dependsOn: () => [],
-		timeOutMins: 60,
+		timeOutMins: () => 60,
 		shouldCache: (req, res): boolean => {
 			return res.statusCode >= 200 && res.statusCode < 400;
 		},
@@ -97,10 +99,9 @@ export function expressCache (opts: ExpressCacheOptions) {
 		cache
 	} = options;
 
-	return async function (req: Request, res: Response, next: NextFunction) {
+	return async function (req: ExtendedRequest, res: Response, next: NextFunction) {
 		const cacheUrl = req.originalUrl || req.url;
 		const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
-		// @ts-expect-error cacheHash is a legit key
 		const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
 		const depArrayValues = dependsOn();
 		const cachedResponse = await cache.get(cacheKey, depArrayValues);
@@ -147,9 +148,16 @@ export function expressCache (opts: ExpressCacheOptions) {
 				delete inFlight[cacheKey];
 			}
 
+			const uncachedResponse: CachedResponse = {
+				body: isJson ? JSON.stringify(bodyContent) : bodyContent,
+				headers: JSON.stringify(res.getHeaders()),
+				statusCode: res.statusCode
+			};
+
 			// Check the status code before storing
 			const shouldCacheResult = shouldCache(req, res);
 			if (shouldCacheResult !== true) {
+				emitter.emit(cacheKey, uncachedResponse);
 				if (typeof shouldCacheResult === "string") {
 					return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
 				}
@@ -163,7 +171,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 				statusCode: res.statusCode
 			};
 
-			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins, onTimeout, depArrayValues);
+			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins(req), onTimeout, depArrayValues);
 			if (cachedSuccessfully) {
 				onCacheEvent("STORED", cacheUrl);
 			} else {

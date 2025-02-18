@@ -56,7 +56,7 @@ function getPoolSize(cacheKey) {
 function expressCache(opts) {
     const defaults = {
         dependsOn: () => [],
-        timeOutMins: 60,
+        timeOutMins: () => 60,
         shouldCache: (req, res) => {
             return res.statusCode >= 200 && res.statusCode < 400;
         },
@@ -79,7 +79,6 @@ function expressCache(opts) {
     return async function (req, res, next) {
         const cacheUrl = req.originalUrl || req.url;
         const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
-        // @ts-expect-error cacheHash is a legit key
         const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
         const depArrayValues = dependsOn();
         const cachedResponse = await cache.get(cacheKey, depArrayValues);
@@ -119,11 +118,17 @@ function expressCache(opts) {
             if (options.pooling) {
                 delete inFlight[cacheKey];
             }
+            const uncachedResponse = {
+                body: isJson ? JSON.stringify(bodyContent) : bodyContent,
+                headers: JSON.stringify(res.getHeaders()),
+                statusCode: res.statusCode
+            };
             // Check the status code before storing
             const shouldCacheResult = shouldCache(req, res);
             if (shouldCacheResult !== true) {
+                emitter.emit(cacheKey, uncachedResponse);
                 if (typeof shouldCacheResult === "string") {
-                    return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}), ${shouldCacheResult}`);
+                    return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
                 }
                 return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
             }
@@ -132,7 +137,7 @@ function expressCache(opts) {
                 headers: JSON.stringify(res.getHeaders()),
                 statusCode: res.statusCode
             };
-            const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins, onTimeout, depArrayValues);
+            const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins(req), onTimeout, depArrayValues);
             if (cachedSuccessfully) {
                 onCacheEvent("STORED", cacheUrl);
             }

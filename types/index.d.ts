@@ -42,8 +42,9 @@ interface ExpressCacheOptions {
     dependsOn?: () => any[];
     /**
      * Timeout in minutes for cache expiration. Default is 1 hour (60 mins).
+     * @param {Request} req The current request.
      */
-    timeOutMins?: number;
+    timeOutMins?: (req: Request) => number;
     /**
      * A callback function to execute when a cached item expires.
      * @param key The key that timed out.
@@ -83,11 +84,14 @@ interface ExpressCacheOptions {
     pooling?: boolean;
 }
 
-interface ExpressCacheOptionsRequired extends Required<ExpressCacheOptions> {
-}
+type ExpressCacheOptionsRequired = Required<ExpressCacheOptions>;
 
 interface RedisCacheConstructorOptions {
     client?: RedisClientType<any>;
+}
+
+interface ExtendedRequest extends Request {
+    cacheHash?: string;
 }
 
 /**
@@ -110,7 +114,7 @@ declare function hashString(str: string): string;
  * @param opts Options for caching.
  * @returns Middleware function.
  */
-declare function expressCache(opts: ExpressCacheOptions): (req: Request<any>, res: Response<any>, next: NextFunction) => Promise<void>;
+declare function expressCache(opts: ExpressCacheOptions): (req: ExtendedRequest, res: Response, next: NextFunction) => Promise<void>;
 
 /**
  * MemoryCache class for caching data in memory.
