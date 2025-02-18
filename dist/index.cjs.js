@@ -46,6 +46,9 @@ function getPoolSize(cacheKey) {
         return 0;
     return listenersForKeyGlobals.length;
 }
+function requestHasPool(cacheKey, options) {
+    return options.pooling && inFlight[cacheKey];
+}
 /**
  * Middleware function for Express.js to enable caching. Use it
  * like any express middleware. Calling this function returns
@@ -70,6 +73,7 @@ function expressCache(opts) {
         provideCacheKey: (cacheUrl) => {
             return "c_" + hashString(cacheUrl);
         },
+        requestTimeoutMs: 20000,
         compression: false,
         pooling: true
     };
@@ -77,7 +81,7 @@ function expressCache(opts) {
         ...defaults,
         ...opts
     };
-    const { dependsOn, timeOutMins, onTimeout, onCacheEvent, shouldCache, provideCacheKey, cache } = options;
+    const { dependsOn, timeOutMins, onTimeout, onCacheEvent, shouldCache, provideCacheKey, requestTimeoutMs, cache } = options;
     return async function (req, res, next) {
         const cacheUrl = req.originalUrl || req.url;
         const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
@@ -85,50 +89,70 @@ function expressCache(opts) {
         const depArrayValues = dependsOn();
         const cachedResponse = await cache.get(cacheKey, depArrayValues);
         const missReasons = [];
+        if (!isDisableCacheHeaderPresent && cachedResponse) {
+            onCacheEvent("HIT", cacheUrl);
+            respondWithCachedResponse(cachedResponse, res);
+            return;
+        }
         if (isDisableCacheHeaderPresent) {
             missReasons.push("CACHE_CONTROL_HEADER");
         }
         if (!cachedResponse) {
-            if (options.pooling && inFlight[cacheKey]) {
+            if (requestHasPool(cacheKey, options)) {
                 missReasons.push(`RESPONSE_POOLED: ${getPoolSize(cacheKey) + 1}`);
             }
             else {
                 missReasons.push("RESPONSE_NOT_IN_CACHE");
             }
         }
-        if (!isDisableCacheHeaderPresent && cachedResponse) {
-            onCacheEvent("HIT", cacheUrl);
-            respondWithCachedResponse(cachedResponse, res);
-            return;
-        }
         onCacheEvent("MISS", cacheUrl, missReasons.join("; "));
         const originalSend = res.send;
         const originalJson = res.json;
         // Check if there is a pool for this cacheKey
-        if (!isDisableCacheHeaderPresent && options.pooling && inFlight[cacheKey]) {
-            // We already have a request in flight for this resource, hook the event handler
-            emitter.once(cacheKey, (cachedResponse) => {
+        if (requestHasPool(cacheKey, options)) {
+            // We already have a request pool for this resource, hook the event handler
+            const respondHandler = (cachedResponse) => {
                 // The event was fired indicating we have a response to the request
+                clearTimeout(requestTimeout);
                 respondWithCachedResponse(cachedResponse, res);
-            });
+            };
+            // Set a timeout on the pool to ensure we don't hang it forever
+            const requestTimeout = setTimeout(() => {
+                emitter.off(cacheKey, respondHandler);
+                res.status(504).send({
+                    isErr: true,
+                    status: 504,
+                    err: {
+                        key: "REQUEST_TIMEOUT",
+                        msg: "Request timed out waiting for the route handler to respond"
+                    }
+                });
+            }, requestTimeoutMs);
+            // Emit the event to resolve the pool
+            emitter.once(cacheKey, respondHandler);
             return;
         }
+        // If polling is enabled, store that we have an in-flight request for this resource now
         if (options.pooling) {
             inFlight[cacheKey] = true;
         }
-        const storeCache = async (bodyContent, isJson = false) => {
-            if (options.pooling) {
-                delete inFlight[cacheKey];
-            }
-            const uncachedResponse = {
+        const resolvePool = (bodyContent, isJson = false) => {
+            const finalResponse = {
                 body: isJson ? JSON.stringify(bodyContent) : bodyContent,
                 headers: JSON.stringify(res.getHeaders()),
                 statusCode: res.statusCode
             };
+            if (options.pooling) {
+                delete inFlight[cacheKey];
+                onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+            }
+            emitter.emit(cacheKey, finalResponse);
+        };
+        const storeCache = async (bodyContent, isJson = false) => {
             // Check the status code before storing
             const shouldCacheResult = shouldCache(req, res);
             if (shouldCacheResult !== true) {
-                emitter.emit(cacheKey, uncachedResponse);
+                resolvePool(bodyContent, isJson);
                 if (typeof shouldCacheResult === "string") {
                     return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
                 }
@@ -146,10 +170,7 @@ function expressCache(opts) {
             else {
                 onCacheEvent("NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
             }
-            if (options.pooling) {
-                onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
-            }
-            emitter.emit(cacheKey, cachedResponse);
+            resolvePool(bodyContent, isJson);
         };
         res.send = function (body) {
             storeCache(body, typeof body === "object");

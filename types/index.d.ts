@@ -73,6 +73,11 @@ interface ExpressCacheOptions {
      */
     provideCacheKey?: (url: string, req: Request) => string;
     /**
+     * The number of milliseconds to wait for the express route handler
+     * to return a response before we give up.
+     */
+    requestTimeoutMs?: number;
+    /**
      * Flag indicating if we should compress the data before storing
      * it in the cache system. Defaults to false.
      */
