@@ -113,9 +113,9 @@ export function expressCache (opts: ExpressCacheOptions) {
 		const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
 		const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
 		const depArrayValues = dependsOn();
+		const shouldGetCacheResult = shouldGetCache(req, res);
 		const missReasons = [];
 		let cachedResponse;
-		const shouldGetCacheResult = shouldGetCache(req, res);
 
 		if (shouldGetCacheResult === true) {
 			cachedResponse = await cache.get(cacheKey, depArrayValues);
@@ -130,7 +130,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 		if (!isDisableCacheHeaderPresent && cachedResponse) {
 			onCacheEvent(req, "HIT", cacheUrl);
 			respondWithCachedResponse(cachedResponse, res);
-			onCacheEvent(req, "FINISHED", cacheUrl);
+			onCacheEvent(req, "FINISHED_CACHE_HIT", cacheUrl);
 			return;
 		}
 
@@ -197,17 +197,19 @@ export function expressCache (opts: ExpressCacheOptions) {
 			emitter.emit(cacheKey, finalResponse);
 		};
 
-		const storeCache = async (bodyContent: string, isJson = false) => {
+		const storeCache = async (bodyContent: string, isJson = false): Promise<boolean> => {
 			// Check the status code before storing
 			const shouldCacheResult = shouldSetCache(req, res);
 			if (shouldCacheResult !== true) {
 				resolvePool(bodyContent, isJson);
 
 				if (typeof shouldCacheResult === "string") {
-					return onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
+					onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
+					return false;
 				}
 
-				return onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
+				onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
+				return false;
 			}
 
 			const cachedResponse: CachedResponse = {
@@ -225,19 +227,30 @@ export function expressCache (opts: ExpressCacheOptions) {
 			}
 
 			resolvePool(bodyContent, isJson);
+			return true;
 		};
 
 		res.send = function (body) {
-			storeCache(body, typeof body === "object");
+			storeCache(body, typeof body === "object").then((didStore) => {
+				if (didStore) {
+					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", cacheUrl);
+				} else {
+					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", cacheUrl);
+				}
+			});
 			originalSend.call(this, body);
-			onCacheEvent(req, "FINISHED", cacheUrl);
 			return res;
 		};
 
 		res.json = function (body) {
-			storeCache(body, true);
+			storeCache(body, true).then((didStore) => {
+				if (didStore) {
+					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", cacheUrl);
+				} else {
+					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", cacheUrl);
+				}
+			});
 			originalJson.call(this, body);
-			onCacheEvent(req, "FINISHED", cacheUrl);
 			return res;
 		};
 
