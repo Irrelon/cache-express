@@ -186,7 +186,8 @@ export function expressCache (opts: ExpressCacheOptions) {
 			const finalResponse: CachedResponse = {
 				body: isJson ? JSON.stringify(bodyContent) : bodyContent,
 				headers: JSON.stringify(res.getHeaders()),
-				statusCode: res.statusCode
+				statusCode: res.statusCode,
+				requestUrl: req.originalUrl || req.url,
 			};
 
 			if (options.pooling) {
@@ -215,7 +216,8 @@ export function expressCache (opts: ExpressCacheOptions) {
 			const cachedResponse: CachedResponse = {
 				body: isJson ? JSON.stringify(bodyContent) : bodyContent,
 				headers: JSON.stringify(res.getHeaders()),
-				statusCode: res.statusCode
+				statusCode: res.statusCode,
+				requestUrl: req.originalUrl || req.url,
 			};
 
 			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins(req), onTimeout, depArrayValues);

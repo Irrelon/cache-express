@@ -9,6 +9,7 @@ interface CachedResponse {
     body: string;
     headers: string;
     statusCode: number;
+    requestUrl: string;
 }
 
 type CacheEvent = "MISS" | "HIT" | "STORED" | "NOT_STORED" | "POOL_SEND" | "FINISHED_CACHE_HIT" | "FINISHED_CACHE_MISS_AND_STORED" | "FINISHED_CACHE_MISS_AND_NOT_STORED";

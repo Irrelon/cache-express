@@ -156,7 +156,8 @@ function expressCache(opts) {
             const finalResponse = {
                 body: isJson ? JSON.stringify(bodyContent) : bodyContent,
                 headers: JSON.stringify(res.getHeaders()),
-                statusCode: res.statusCode
+                statusCode: res.statusCode,
+                requestUrl: req.originalUrl || req.url,
             };
             if (options.pooling) {
                 delete inFlight[cacheKey];
@@ -179,7 +180,8 @@ function expressCache(opts) {
             const cachedResponse = {
                 body: isJson ? JSON.stringify(bodyContent) : bodyContent,
                 headers: JSON.stringify(res.getHeaders()),
-                statusCode: res.statusCode
+                statusCode: res.statusCode,
+                requestUrl: req.originalUrl || req.url,
             };
             const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins(req), onTimeout, depArrayValues);
             if (cachedSuccessfully) {

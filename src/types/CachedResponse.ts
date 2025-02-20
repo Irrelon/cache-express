@@ -6,4 +6,5 @@ export interface CachedResponse {
 	body: string;
 	headers: string;
 	statusCode: number;
+	requestUrl: string;
 }
