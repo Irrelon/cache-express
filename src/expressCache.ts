@@ -115,11 +115,16 @@ export function expressCache (opts: ExpressCacheOptions) {
 		const depArrayValues = dependsOn();
 		const missReasons = [];
 		let cachedResponse;
+		const shouldGetCacheResult = shouldGetCache(req, res);
 
-		if (shouldGetCache(req, res)) {
+		if (shouldGetCacheResult === true) {
 			cachedResponse = await cache.get(cacheKey, depArrayValues);
 		} else {
-			missReasons.push("SHOULD_GET_CACHE_FALSE");
+			if (typeof shouldGetCacheResult === "string") {
+				missReasons.push(shouldGetCacheResult);
+			} else {
+				missReasons.push("SHOULD_GET_CACHE_FALSE");
+			}
 		}
 
 		if (!isDisableCacheHeaderPresent && cachedResponse) {
