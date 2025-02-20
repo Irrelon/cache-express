@@ -4,9 +4,11 @@ Add cache support to your Express application. Supports in-memory and
 Redis-based caching out of the box.
 
 ## Install
+> This module has a peer dependency of `@irrelon/emitter` which is also
+> installed by this command:
 
 ```
-npm install @irrelon/cache-express
+npm i @irrelon/cache-express @irrelon/emitter
 ```
 
 ## Usage

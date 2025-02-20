@@ -72,7 +72,10 @@ export function expressCache (opts: ExpressCacheOptions) {
 	const defaults: Omit<ExpressCacheOptionsRequired, "cache"> = {
 		dependsOn: () => [],
 		timeOutMins: () => 60,
-		shouldCache: (req, res): boolean => {
+		shouldGetCache: (): boolean => {
+			return true;
+		},
+		shouldSetCache: (req, res): boolean => {
 			return res.statusCode >= 200 && res.statusCode < 400;
 		},
 		onTimeout: () => {
@@ -98,7 +101,8 @@ export function expressCache (opts: ExpressCacheOptions) {
 		timeOutMins,
 		onTimeout,
 		onCacheEvent,
-		shouldCache,
+		shouldGetCache,
+		shouldSetCache,
 		provideCacheKey,
 		requestTimeoutMs,
 		cache
@@ -112,8 +116,8 @@ export function expressCache (opts: ExpressCacheOptions) {
 		const cachedResponse = await cache.get(cacheKey, depArrayValues);
 		const missReasons = [];
 
-		if (!isDisableCacheHeaderPresent && cachedResponse) {
-			onCacheEvent("HIT", cacheUrl);
+		if (!isDisableCacheHeaderPresent && shouldGetCache(req, res) && cachedResponse) {
+			onCacheEvent(req, "HIT", cacheUrl);
 			respondWithCachedResponse(cachedResponse, res);
 			return;
 		}
@@ -130,7 +134,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 			}
 		}
 
-		onCacheEvent("MISS", cacheUrl, missReasons.join("; "));
+		onCacheEvent(req, "MISS", cacheUrl, missReasons.join("; "));
 		const originalSend = res.send;
 		const originalJson = res.json;
 
@@ -175,7 +179,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 
 			if (options.pooling) {
 				delete inFlight[cacheKey];
-				onCacheEvent("POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+				onCacheEvent(req, "POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
 			}
 
 			emitter.emit(cacheKey, finalResponse);
@@ -183,15 +187,15 @@ export function expressCache (opts: ExpressCacheOptions) {
 
 		const storeCache = async (bodyContent: string, isJson = false) => {
 			// Check the status code before storing
-			const shouldCacheResult = shouldCache(req, res);
+			const shouldCacheResult = shouldSetCache(req, res);
 			if (shouldCacheResult !== true) {
 				resolvePool(bodyContent, isJson);
 
 				if (typeof shouldCacheResult === "string") {
-					return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
+					return onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
 				}
 
-				return onCacheEvent("NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
+				return onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
 			}
 
 			const cachedResponse: CachedResponse = {
@@ -203,9 +207,9 @@ export function expressCache (opts: ExpressCacheOptions) {
 			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins(req), onTimeout, depArrayValues);
 
 			if (cachedSuccessfully) {
-				onCacheEvent("STORED", cacheUrl);
+				onCacheEvent(req, "STORED", cacheUrl);
 			} else {
-				onCacheEvent("NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
+				onCacheEvent(req, "NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
 			}
 
 			resolvePool(bodyContent, isJson);

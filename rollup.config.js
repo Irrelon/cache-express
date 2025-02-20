@@ -22,6 +22,7 @@ export default [
 				tsconfig: './tsconfig.json',
 			}),
 		],
+		external: ['@irrelon/emitter']
 	},
 	// Type Declarations Bundling
 	{
@@ -31,5 +32,6 @@ export default [
 			format: 'es',
 		},
 		plugins: [dts()],
+		external: ['@irrelon/emitter']
 	},
 ];

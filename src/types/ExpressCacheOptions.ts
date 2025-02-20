@@ -26,6 +26,17 @@ export interface ExpressCacheOptions {
 	onCacheEvent?: CacheEventCallback;
 	/**
 	 * Provide this callback function to fine-control which requests
+	 * should be served a cached response.
+	 * @param {Request} req The current request.
+	 * @param {Response} res The current response.
+	 * @returns Boolean true if the request should be served a cached
+	 * response or false if not. You can also return a string explaining
+	 * why this should not be cached, and it will be added to the reasons
+	 * for the MISS event.
+	 */
+	shouldGetCache?: (req: Request, res: Response) => boolean | string;
+	/**
+	 * Provide this callback function to fine-control which requests
 	 * should be cached.
 	 * @param {Request} req The current request.
 	 * @param {Response} res The current response.
@@ -33,7 +44,7 @@ export interface ExpressCacheOptions {
 	 * You can also return a string explaining why this should not be cached,
 	 * and it will be added to the reasons for the NOT_STORED event.
 	 */
-	shouldCache?: (req: Request, res: Response) => boolean | string;
+	shouldSetCache?: (req: Request, res: Response) => boolean | string;
 	/**
 	 * Provide this callback to generate your own cache keys from
 	 * url / request data. This allows you to decide what request

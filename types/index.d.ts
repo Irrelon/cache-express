@@ -13,12 +13,17 @@ interface CachedResponse {
 
 type CacheEvent = "MISS" | "HIT" | "STORED" | "NOT_STORED" | "POOL_SEND";
 
+interface ExtendedRequest extends Request {
+    cacheHash?: string;
+}
+
 /**
+ * @param req The request that caused the event.
  * @param evt The cache event being raised.
  * @param url The url that the event was raised against.
  * @param reason The reason for the event.
  */
-type CacheEventCallback = (evt: CacheEvent, url: string, reason?: string) => void;
+type CacheEventCallback = (req: ExtendedRequest, evt: CacheEvent, url: string, reason?: string) => void;
 
 /**
  * Implement this interface when creating new cache systems
@@ -56,6 +61,17 @@ interface ExpressCacheOptions {
     onCacheEvent?: CacheEventCallback;
     /**
      * Provide this callback function to fine-control which requests
+     * should be served a cached response.
+     * @param {Request} req The current request.
+     * @param {Response} res The current response.
+     * @returns Boolean true if the request should be served a cached
+     * response or false if not. You can also return a string explaining
+     * why this should not be cached, and it will be added to the reasons
+     * for the MISS event.
+     */
+    shouldGetCache?: (req: Request, res: Response) => boolean | string;
+    /**
+     * Provide this callback function to fine-control which requests
      * should be cached.
      * @param {Request} req The current request.
      * @param {Response} res The current response.
@@ -63,7 +79,7 @@ interface ExpressCacheOptions {
      * You can also return a string explaining why this should not be cached,
      * and it will be added to the reasons for the NOT_STORED event.
      */
-    shouldCache?: (req: Request, res: Response) => boolean | string;
+    shouldSetCache?: (req: Request, res: Response) => boolean | string;
     /**
      * Provide this callback to generate your own cache keys from
      * url / request data. This allows you to decide what request
@@ -93,10 +109,6 @@ type ExpressCacheOptionsRequired = Required<ExpressCacheOptions>;
 
 interface RedisCacheConstructorOptions {
     client?: RedisClientType<any>;
-}
-
-interface ExtendedRequest extends Request {
-    cacheHash?: string;
 }
 
 /**
