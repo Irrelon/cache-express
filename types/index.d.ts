@@ -11,7 +11,7 @@ interface CachedResponse {
     statusCode: number;
 }
 
-type CacheEvent = "MISS" | "HIT" | "STORED" | "NOT_STORED" | "POOL_SEND";
+type CacheEvent = "MISS" | "HIT" | "STORED" | "NOT_STORED" | "POOL_SEND" | "FINISHED";
 
 interface ExtendedRequest extends Request {
     cacheHash?: string;

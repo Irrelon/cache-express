@@ -105,6 +105,7 @@ function expressCache(opts) {
         if (!isDisableCacheHeaderPresent && cachedResponse) {
             onCacheEvent(req, "HIT", cacheUrl);
             respondWithCachedResponse(cachedResponse, res);
+            onCacheEvent(req, "FINISHED", cacheUrl);
             return;
         }
         if (isDisableCacheHeaderPresent) {
@@ -188,11 +189,13 @@ function expressCache(opts) {
         res.send = function (body) {
             storeCache(body, typeof body === "object");
             originalSend.call(this, body);
+            onCacheEvent(req, "FINISHED", cacheUrl);
             return res;
         };
         res.json = function (body) {
             storeCache(body, true);
             originalJson.call(this, body);
+            onCacheEvent(req, "FINISHED", cacheUrl);
             return res;
         };
         next();
