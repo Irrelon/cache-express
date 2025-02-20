@@ -1,5 +1,6 @@
 import type {CacheEventCallback, CacheInterface} from "./index";
-import type {Request, Response} from "express";
+import type {Response} from "express";
+import type {ExtendedRequest} from "./ExtendedRequest";
 
 export interface ExpressCacheOptions {
 	/**
@@ -14,7 +15,7 @@ export interface ExpressCacheOptions {
 	 * Timeout in minutes for cache expiration. Default is 1 hour (60 mins).
 	 * @param {Request} req The current request.
 	 */
-	timeOutMins?: (req: Request) => number;
+	timeOutMins?: <RequestType extends ExtendedRequest>(req: RequestType) => number;
 	/**
 	 * A callback function to execute when a cached item expires.
 	 * @param key The key that timed out.
@@ -34,7 +35,7 @@ export interface ExpressCacheOptions {
 	 * why this should not be cached, and it will be added to the reasons
 	 * for the MISS event.
 	 */
-	shouldGetCache?: (req: Request, res: Response) => boolean | string;
+	shouldGetCache?: <RequestType extends ExtendedRequest>(req: RequestType, res: Response) => boolean | string;
 	/**
 	 * Provide this callback function to fine-control which requests
 	 * should be cached.
@@ -44,7 +45,7 @@ export interface ExpressCacheOptions {
 	 * You can also return a string explaining why this should not be cached,
 	 * and it will be added to the reasons for the NOT_STORED event.
 	 */
-	shouldSetCache?: (req: Request, res: Response) => boolean | string;
+	shouldSetCache?: <RequestType extends ExtendedRequest>(req: RequestType, res: Response) => boolean | string;
 	/**
 	 * Provide this callback to generate your own cache keys from
 	 * url / request data. This allows you to decide what request
@@ -52,7 +53,7 @@ export interface ExpressCacheOptions {
 	 * @param url The url of the request.
 	 * @param req The actual request object.
 	 */
-	provideCacheKey?: (url: string, req: Request) => string;
+	provideCacheKey?: <RequestType extends ExtendedRequest>(url: string, req: RequestType) => string;
 	/**
 	 * The number of milliseconds to wait for the express route handler
 	 * to return a response before we give up.
