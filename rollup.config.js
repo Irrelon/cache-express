@@ -1,5 +1,6 @@
 import typescript from 'rollup-plugin-typescript2';
 import {dts} from 'rollup-plugin-dts';
+import json from "@rollup/plugin-json";
 
 export default [
 	// JavaScript Bundling
@@ -18,6 +19,7 @@ export default [
 			},
 		],
 		plugins: [
+			json(),
 			typescript({
 				tsconfig: './tsconfig.json',
 			}),
@@ -31,7 +33,7 @@ export default [
 			file: './types/index.d.ts', // Combined type output
 			format: 'es',
 		},
-		plugins: [dts()],
+		plugins: [json(), dts()],
 		external: ['@irrelon/emitter']
 	},
 ];

@@ -65,11 +65,8 @@ function expressCache(opts) {
         shouldGetCache: () => {
             return true;
         },
-        shouldSetCache: (req, res) => {
+        shouldSetCache: (_, res) => {
             return res.statusCode >= 200 && res.statusCode < 400;
-        },
-        onTimeout: () => {
-            console.log("Cache removed");
         },
         onCacheEvent: () => {
         },
@@ -84,7 +81,7 @@ function expressCache(opts) {
         ...defaults,
         ...opts
     };
-    const { dependsOn, timeOutMins, onTimeout, onCacheEvent, shouldGetCache, shouldSetCache, provideCacheKey, requestTimeoutMs, cache } = options;
+    const { dependsOn, timeOutMins, onCacheEvent, shouldGetCache, shouldSetCache, provideCacheKey, requestTimeoutMs, cache } = options;
     return async function (req, res, next) {
         const cacheUrl = req.originalUrl || req.url;
         const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
@@ -92,9 +89,9 @@ function expressCache(opts) {
         const depArrayValues = dependsOn();
         const shouldGetCacheResult = shouldGetCache(req, res);
         const missReasons = [];
-        let cachedResponse;
+        let cachedItemContainer;
         if (shouldGetCacheResult === true) {
-            cachedResponse = await cache.get(cacheKey, depArrayValues);
+            cachedItemContainer = await cache.get(cacheKey, depArrayValues);
         }
         else {
             if (typeof shouldGetCacheResult === "string") {
@@ -104,16 +101,22 @@ function expressCache(opts) {
                 missReasons.push("SHOULD_GET_CACHE_FALSE");
             }
         }
-        if (!isDisableCacheHeaderPresent && cachedResponse) {
-            onCacheEvent(req, "HIT", cacheUrl);
-            respondWithCachedResponse(cachedResponse, res);
-            onCacheEvent(req, "FINISHED_CACHE_HIT", cacheUrl);
+        if (!isDisableCacheHeaderPresent && cachedItemContainer) {
+            onCacheEvent(req, "HIT", {
+                url: cacheUrl,
+                cachedItemContainer,
+            });
+            respondWithCachedResponse(cachedItemContainer.value, res);
+            onCacheEvent(req, "FINISHED_CACHE_HIT", {
+                url: cacheUrl,
+                cachedItemContainer,
+            });
             return;
         }
         if (isDisableCacheHeaderPresent) {
             missReasons.push("CACHE_CONTROL_HEADER");
         }
-        if (!cachedResponse) {
+        if (!cachedItemContainer) {
             if (requestHasPool(cacheKey, options)) {
                 missReasons.push(`RESPONSE_POOLED: ${getPoolSize(cacheKey) + 1}`);
             }
@@ -121,7 +124,10 @@ function expressCache(opts) {
                 missReasons.push("RESPONSE_NOT_IN_CACHE");
             }
         }
-        onCacheEvent(req, "MISS", cacheUrl, missReasons.join("; "));
+        onCacheEvent(req, "MISS", {
+            url: cacheUrl,
+            reason: missReasons.join("; "),
+        });
         const originalSend = res.send;
         const originalJson = res.json;
         // Check if there is a pool for this cacheKey
@@ -161,7 +167,10 @@ function expressCache(opts) {
             };
             if (options.pooling) {
                 delete inFlight[cacheKey];
-                onCacheEvent(req, "POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+                onCacheEvent(req, "POOL_SEND", {
+                    url: cacheUrl,
+                    reason: `POOL_SIZE: ${getPoolSize(cacheKey)}`,
+                });
             }
             emitter.emit(cacheKey, finalResponse);
         };
@@ -171,11 +180,21 @@ function expressCache(opts) {
             if (shouldCacheResult !== true) {
                 resolvePool(bodyContent, isJson);
                 if (typeof shouldCacheResult === "string") {
-                    onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
-                    return false;
+                    onCacheEvent(req, "NOT_STORED", {
+                        url: cacheUrl,
+                        reason: `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`,
+                    });
+                    return {
+                        didStore: false
+                    };
                 }
-                onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
-                return false;
+                onCacheEvent(req, "NOT_STORED", {
+                    url: cacheUrl,
+                    reason: `STATUS_CODE (${res.statusCode})`
+                });
+                return {
+                    didStore: false
+                };
             }
             const cachedResponse = {
                 body: isJson ? JSON.stringify(bodyContent) : bodyContent,
@@ -183,35 +202,51 @@ function expressCache(opts) {
                 statusCode: res.statusCode,
                 requestUrl: req.originalUrl || req.url,
             };
-            const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins(req), onTimeout, depArrayValues);
+            const timeoutMins = timeOutMins(req);
+            const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeoutMins, depArrayValues);
             if (cachedSuccessfully) {
-                onCacheEvent(req, "STORED", cacheUrl);
+                onCacheEvent(req, "STORED", {
+                    url: cacheUrl,
+                });
             }
             else {
-                onCacheEvent(req, "NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
+                onCacheEvent(req, "NOT_STORED", {
+                    url: cacheUrl,
+                    reason: "CACHE_UNAVAILABLE",
+                });
             }
             resolvePool(bodyContent, isJson);
-            return true;
+            return {
+                didStore: true,
+            };
         };
         res.send = function (body) {
-            storeCache(body, typeof body === "object").then((didStore) => {
+            storeCache(body, typeof body === "object").then(({ didStore }) => {
                 if (didStore) {
-                    onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", cacheUrl);
+                    onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", {
+                        url: cacheUrl,
+                    });
                 }
                 else {
-                    onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", cacheUrl);
+                    onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", {
+                        url: cacheUrl,
+                    });
                 }
             });
             originalSend.call(this, body);
             return res;
         };
         res.json = function (body) {
-            storeCache(body, true).then((didStore) => {
+            storeCache(body, true).then(({ didStore }) => {
                 if (didStore) {
-                    onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", cacheUrl);
+                    onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", {
+                        url: cacheUrl,
+                    });
                 }
                 else {
-                    onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", cacheUrl);
+                    onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", {
+                        url: cacheUrl
+                    });
                 }
             });
             originalJson.call(this, body);
@@ -220,6 +255,20 @@ function expressCache(opts) {
         next();
     };
 }
+
+function expiryFromMins(timeoutMins) {
+    const timeoutMs = timeoutMins * 60000;
+    const expireTime = Date.now() + timeoutMs;
+    const expireAt = new Date(expireTime).toISOString();
+    return {
+        timeoutMins,
+        timeoutMs,
+        expiresTime: expireTime,
+        expiresAt: expireAt
+    };
+}
+
+var version = "4.3.2";
 
 /**
  * MemoryCache class for caching data in memory.
@@ -246,40 +295,47 @@ class MemoryCache {
             void this.remove(key);
             return null;
         }
-        if (!item || (item.expireTime > 0 && item.expireTime <= Date.now())) {
+        if (!item || (item.metaData.expiry.expiresTime > 0 && item.metaData.expiry.expiresTime <= Date.now())) {
             void this.remove(key);
             return null;
         }
-        return item.value;
+        return item;
     }
     /**
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
      * @param timeoutMins Timeout in minutes.
-     * @param callback Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    async set(key, value, timeoutMins = 0, callback = () => { }, dependencies = []) {
+    async set(key, value, timeoutMins = 0, dependencies = []) {
         this.dependencies[key] = dependencies;
+        const expiry = expiryFromMins(timeoutMins);
+        const { timeoutMs, } = expiry;
         if (!timeoutMins) {
-            this.cache[key] = { value, dependencies };
+            this.cache[key] = {
+                value,
+                metaData: {
+                    expiry,
+                    modelVersion: version
+                }
+            };
             return true;
         }
-        const timeoutMs = timeoutMins * 60000;
-        const expireTime = Date.now() + (timeoutMs);
         // Check if the timeout is greater than the max 32-bit signed integer value
         // that setTimeout accepts
         if (timeoutMs > 0x7FFFFFFF) {
             throw new Error("Timeout cannot be greater than 2147483647ms");
         }
-        this.cache[key] = { value, expireTime, dependencies, timeoutMins };
-        if (!callback) {
-            return true;
-        }
+        this.cache[key] = {
+            value,
+            metaData: {
+                expiry,
+                modelVersion: version
+            }
+        };
         this.timers[key] = setTimeout(() => {
             if (this.cache[key]) {
-                callback(key);
                 this.remove(key);
             }
         }, timeoutMs);
@@ -381,17 +437,16 @@ class RedisCache {
             return null;
         }
         // We have a useful value, return it
-        return item.value;
+        return item;
     }
     /**
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
      * @param timeoutMins Timeout in minutes.
-     * @param onTimeout Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    async set(key, value, timeoutMins = 0, onTimeout = () => { }, dependencies = []) {
+    async set(key, value, timeoutMins = 0, dependencies = []) {
         if (!this.client.isOpen || !this.client.isReady) {
             // The redis connection is not open or ready, don't store anything
             return false;
@@ -401,13 +456,16 @@ class RedisCache {
             await this.client.set(key, JSON.stringify({ value }));
             return true;
         }
-        const timeoutMs = timeoutMins * 60000;
-        const expireTime = Date.now() + timeoutMs;
-        const expireAt = new Date(expireTime).toISOString();
-        await this.client.set(key, JSON.stringify({
+        const expiry = expiryFromMins(timeoutMins);
+        const { expiresTime, } = expiry;
+        const cachedItemContainer = {
             value,
-            expireAt,
-        }), { PXAT: expireTime });
+            metaData: {
+                expiry,
+                modelVersion: version
+            }
+        };
+        await this.client.set(key, JSON.stringify(cachedItemContainer), { PXAT: expiresTime });
         return true;
     }
     /**

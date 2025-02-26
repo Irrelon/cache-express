@@ -17,11 +17,6 @@ export interface ExpressCacheOptions {
 	 */
 	timeOutMins?: <RequestType extends ExtendedRequest>(req: RequestType) => number;
 	/**
-	 * A callback function to execute when a cached item expires.
-	 * @param key The key that timed out.
-	 */
-	onTimeout?: (key: string) => void;
-	/**
 	 * A callback function to execute when a cache event is raised.
 	 */
 	onCacheEvent?: CacheEventCallback;

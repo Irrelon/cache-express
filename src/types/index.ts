@@ -6,3 +6,5 @@ export * from "./ExpressCacheOptions";
 export * from "./ExpressCacheOptionsRequired";
 export * from "./ExtendedRequest";
 export * from "./RedisCacheConstructorOptions";
+export * from "./StoreCacheResult";
+export * from "./CacheEventCallbackData";

@@ -79,9 +79,6 @@ app.get(
 	expressCache({
 		dependsOn: () => [getUserID()],
 		timeOutMins: 1, // Cache for 1 minute
-		onTimeout: (key, value) => {
-			console.log(`Cache removed for key: ${key}`);
-		},
 	}),
 	(req, res) => {
 		// time consuming api or database calls
@@ -94,9 +91,6 @@ app.get(
 let postsCache = expressCache({
 	dependsOn: () => [postCount],
 	timeOutMins: 1,
-	onTimeout: () => {
-		console.log(`Posts changed, cache removed`);
-	},
 });
 
 // Then use it in route.
@@ -151,9 +145,6 @@ app.get(
    	"/api/data",
    	expressCache({
    		timeOutMins: 1, // Cache for 1 minute
-   		onTimeout: (key, value) => {
-   			console.log(`Cache removed for key: ${key}`);
-   		},
    	})
    );
    ```

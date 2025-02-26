@@ -1,6 +1,8 @@
-import type {CacheInterface} from "./types/CacheInterface";
+import type {CacheInterface, RedisCacheConstructorOptions} from "./types";
 import type {RedisClientType} from "redis";
-import type {RedisCacheConstructorOptions} from "./types/RedisCacheConstructorOptions";
+import {expiryFromMins} from "./utils";
+import type {CachedItemContainer} from "./types/CachedItemContainer";
+import {version} from "../package.json";
 
 /**
  * RedisCache class for caching data to a redis server.
@@ -26,7 +28,7 @@ export class RedisCache implements CacheInterface {
 	 * @param depArrayValues Dependency values for cache checking.
 	 * @returns The cached value if found and not expired, otherwise null.
 	 */
-	async get(key: string, depArrayValues: any[] = []) {
+	async get(key: string, depArrayValues: any[] = []): Promise<CachedItemContainer | null> {
 		if (!this.client.isOpen || !this.client.isReady) {
 			// The redis connection is not open or ready, return null
 			// which will essentially signal no cache and regenerate the request
@@ -68,7 +70,7 @@ export class RedisCache implements CacheInterface {
 		}
 
 		// We have a useful value, return it
-		return item.value;
+		return item;
 	}
 
 	/**
@@ -76,10 +78,9 @@ export class RedisCache implements CacheInterface {
 	 * @param key The cache key.
 	 * @param value The value to cache.
 	 * @param timeoutMins Timeout in minutes.
-	 * @param onTimeout Callback function when the cache expires.
 	 * @param dependencies Dependency values for cache checking.
 	 */
-	async set(key: string, value: any, timeoutMins: number = 0, onTimeout: (key: string) => void = () => {}, dependencies: any[] = []): Promise<boolean> {
+	async set(key: string, value: any, timeoutMins: number = 0, dependencies: any[] = []): Promise<boolean> {
 		if (!this.client.isOpen || !this.client.isReady) {
 			// The redis connection is not open or ready, don't store anything
 			return false;
@@ -92,13 +93,20 @@ export class RedisCache implements CacheInterface {
 			return true;
 		}
 
-		const timeoutMs = timeoutMins * 60000;
-		const expireTime = Date.now() + timeoutMs;
-		const expireAt = new Date(expireTime).toISOString();
-		await this.client.set(key, JSON.stringify({
+		const expiry = expiryFromMins(timeoutMins);
+		const {
+			expiresTime,
+		} = expiry;
+
+		const cachedItemContainer: CachedItemContainer = {
 			value,
-			expireAt,
-		}), {PXAT: expireTime});
+			metaData: {
+				expiry,
+				modelVersion: version
+			}
+		};
+
+		await this.client.set(key, JSON.stringify(cachedItemContainer), {PXAT: expiresTime});
 
 		return true;
 	}

@@ -1,10 +1,13 @@
 import type {CacheInterface} from "./types/CacheInterface";
+import {expiryFromMins} from "./utils";
+import type {CachedItemContainer} from "./types/CachedItemContainer";
+import {version} from "../package.json";
 
 /**
  * MemoryCache class for caching data in memory.
  */
 export class MemoryCache implements CacheInterface {
-	cache: Record<string, any>;
+	cache: Record<string, CachedItemContainer>;
 	dependencies: Record<string, any[]>;
 	timers: Record<string, any>;
 
@@ -20,7 +23,7 @@ export class MemoryCache implements CacheInterface {
 	 * @param depArrayValues Dependency values for cache checking.
 	 * @returns The cached value if found and not expired, otherwise null.
 	 */
-	async get(key: string, depArrayValues: any[]): Promise<any | null> {
+	async get(key: string, depArrayValues: any[]) {
 		const item = this.cache[key];
 		const checkDepsChanged = this.dependenciesChanged(key, depArrayValues);
 
@@ -29,12 +32,12 @@ export class MemoryCache implements CacheInterface {
 			return null;
 		}
 
-		if (!item || (item.expireTime > 0 && item.expireTime <= Date.now())) {
+		if (!item || (item.metaData.expiry.expiresTime > 0 && item.metaData.expiry.expiresTime <= Date.now())) {
 			void this.remove(key);
 			return null;
 		}
 
-		return item.value;
+		return item;
 	}
 
 	/**
@@ -42,19 +45,26 @@ export class MemoryCache implements CacheInterface {
 	 * @param key The cache key.
 	 * @param value The value to cache.
 	 * @param timeoutMins Timeout in minutes.
-	 * @param callback Callback function when the cache expires.
 	 * @param dependencies Dependency values for cache checking.
 	 */
-	async set(key: string, value: any, timeoutMins: number = 0, callback: (key: string) => void = () => {}, dependencies: any[] = []) {
+	async set(key: string, value: any, timeoutMins: number = 0, dependencies: any[] = []) {
 		this.dependencies[key] = dependencies;
 
+		const expiry = expiryFromMins(timeoutMins);
+		const {
+			timeoutMs,
+		} = expiry;
+
 		if (!timeoutMins) {
-			this.cache[key] = {value, dependencies};
+			this.cache[key] = {
+				value,
+				metaData: {
+					expiry,
+					modelVersion: version
+				}
+			};
 			return true;
 		}
-
-		const timeoutMs = timeoutMins * 60000;
-		const expireTime = Date.now() + (timeoutMs);
 
 		// Check if the timeout is greater than the max 32-bit signed integer value
 		// that setTimeout accepts
@@ -62,15 +72,16 @@ export class MemoryCache implements CacheInterface {
 			throw new Error("Timeout cannot be greater than 2147483647ms");
 		}
 
-		this.cache[key] = {value, expireTime, dependencies, timeoutMins};
-
-		if (!callback) {
-			return true;
-		}
+		this.cache[key] = {
+			value,
+			metaData: {
+				expiry,
+				modelVersion: version
+			}
+		};
 
 		this.timers[key] = setTimeout(() => {
 			if (this.cache[key]) {
-				callback(key);
 				this.remove(key);
 			}
 		}, timeoutMs);

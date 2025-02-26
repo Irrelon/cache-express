@@ -18,21 +18,59 @@ interface ExtendedRequest extends Request {
     cacheHash?: string;
 }
 
+interface ExpiryData {
+    /**
+     * The number of minutes to cache for.
+     */
+    timeoutMins: number;
+    /**
+     * The timeoutMins converted to milliseconds.
+     */
+    timeoutMs: number;
+    /**
+     * The expiry time calculated as Date.now() + timeoutMs.
+     */
+    expiresTime: number;
+    /**
+     * The ISO date-time string of the expiresTime.
+     */
+    expiresAt: string;
+}
+
+interface CachedItemContainer {
+    value: CachedResponse;
+    metaData: {
+        expiry: ExpiryData;
+        modelVersion: string;
+    };
+}
+
+interface CacheHitEventCallbackData {
+    url: string;
+    reason?: string;
+    cachedItemContainer: CachedItemContainer;
+}
+interface CacheMissEventCallbackData {
+    url: string;
+    reason?: string;
+}
+type CacheEventCallbackData = CacheHitEventCallbackData | CacheMissEventCallbackData;
+
 /**
  * @param req The request that caused the event.
  * @param evt The cache event being raised.
  * @param url The url that the event was raised against.
  * @param reason The reason for the event.
  */
-type CacheEventCallback = (req: ExtendedRequest, evt: CacheEvent, url: string, reason?: string) => void;
+type CacheEventCallback = (req: ExtendedRequest, evt: CacheEvent, data: CacheEventCallbackData) => void;
 
 /**
  * Implement this interface when creating new cache systems
  * for storing and retrieving cache data in different ways.
  */
 interface CacheInterface {
-    get: (key: string, depArrayValues: any[]) => Promise<CachedResponse | null>;
-    set: (key: string, value: CachedResponse, timeoutMins: number, callback: (key: string) => void, dependencies: any[]) => Promise<boolean>;
+    get: (key: string, depArrayValues: any[]) => Promise<CachedItemContainer | null>;
+    set: (key: string, value: CachedResponse, timeoutMins: number, dependencies: any[]) => Promise<boolean>;
     has: (key: string) => Promise<boolean>;
     remove: (key: string) => Promise<boolean>;
 }
@@ -51,11 +89,6 @@ interface ExpressCacheOptions {
      * @param {Request} req The current request.
      */
     timeOutMins?: <RequestType extends ExtendedRequest>(req: RequestType) => number;
-    /**
-     * A callback function to execute when a cached item expires.
-     * @param key The key that timed out.
-     */
-    onTimeout?: (key: string) => void;
     /**
      * A callback function to execute when a cache event is raised.
      */
@@ -112,6 +145,14 @@ interface RedisCacheConstructorOptions {
     client?: RedisClientType<any>;
 }
 
+interface StoreCachePositiveResult {
+    didStore: true;
+}
+interface StoreCacheNegativeResult {
+    didStore: false;
+}
+type StoreCacheResult = StoreCachePositiveResult | StoreCacheNegativeResult;
+
 /**
  * A map of keys and booleans to determine if a particular request (represented
  * by a cache key string) is currently being processed / loaded or not.
@@ -138,7 +179,7 @@ declare function expressCache(opts: ExpressCacheOptions): (req: ExtendedRequest,
  * MemoryCache class for caching data in memory.
  */
 declare class MemoryCache implements CacheInterface {
-    cache: Record<string, any>;
+    cache: Record<string, CachedItemContainer>;
     dependencies: Record<string, any[]>;
     timers: Record<string, any>;
     constructor();
@@ -148,16 +189,15 @@ declare class MemoryCache implements CacheInterface {
      * @param depArrayValues Dependency values for cache checking.
      * @returns The cached value if found and not expired, otherwise null.
      */
-    get(key: string, depArrayValues: any[]): Promise<any | null>;
+    get(key: string, depArrayValues: any[]): Promise<CachedItemContainer | null>;
     /**
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
      * @param timeoutMins Timeout in minutes.
-     * @param callback Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    set(key: string, value: any, timeoutMins?: number, callback?: (key: string) => void, dependencies?: any[]): Promise<boolean>;
+    set(key: string, value: any, timeoutMins?: number, dependencies?: any[]): Promise<boolean>;
     /**
      * Checks if a key exists in the cache.
      * @param key The cache key to check.
@@ -192,16 +232,15 @@ declare class RedisCache implements CacheInterface {
      * @param depArrayValues Dependency values for cache checking.
      * @returns The cached value if found and not expired, otherwise null.
      */
-    get(key: string, depArrayValues?: any[]): Promise<any>;
+    get(key: string, depArrayValues?: any[]): Promise<CachedItemContainer | null>;
     /**
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
      * @param timeoutMins Timeout in minutes.
-     * @param onTimeout Callback function when the cache expires.
      * @param dependencies Dependency values for cache checking.
      */
-    set(key: string, value: any, timeoutMins?: number, onTimeout?: (key: string) => void, dependencies?: any[]): Promise<boolean>;
+    set(key: string, value: any, timeoutMins?: number, dependencies?: any[]): Promise<boolean>;
     /**
      * Removes a value from the cache.
      * @param key The cache key to remove.
@@ -222,4 +261,4 @@ declare class RedisCache implements CacheInterface {
     dependenciesChanged(key: string, depArrayValues: any[]): boolean;
 }
 
-export { type CacheEvent, type CacheEventCallback, type CacheInterface, type CachedResponse, type ExpressCacheOptions, type ExpressCacheOptionsRequired, type ExtendedRequest, MemoryCache, RedisCache, type RedisCacheConstructorOptions, expressCache, hashString, inFlight };
+export { type CacheEvent, type CacheEventCallback, type CacheEventCallbackData, type CacheHitEventCallbackData, type CacheInterface, type CacheMissEventCallbackData, type CachedResponse, type ExpressCacheOptions, type ExpressCacheOptionsRequired, type ExtendedRequest, MemoryCache, RedisCache, type RedisCacheConstructorOptions, type StoreCacheNegativeResult, type StoreCachePositiveResult, type StoreCacheResult, expressCache, hashString, inFlight };

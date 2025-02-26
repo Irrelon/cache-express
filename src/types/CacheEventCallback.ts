@@ -1,5 +1,6 @@
 import type {CacheEvent} from "./CacheEvent";
 import type {ExtendedRequest} from "./ExtendedRequest";
+import type {CacheEventCallbackData} from "./CacheEventCallbackData";
 
 /**
  * @param req The request that caused the event.
@@ -7,5 +8,5 @@ import type {ExtendedRequest} from "./ExtendedRequest";
  * @param url The url that the event was raised against.
  * @param reason The reason for the event.
  */
-export type CacheEventCallback = (req: ExtendedRequest, evt: CacheEvent, url: string, reason?: string) => void;
+export type CacheEventCallback = (req: ExtendedRequest, evt: CacheEvent, data: CacheEventCallbackData) => void;
 

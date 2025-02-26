@@ -1,7 +1,12 @@
 import {Emitter} from "@irrelon/emitter";
 import type {NextFunction, Request, Response} from "express";
-import type {CachedResponse, ExpressCacheOptions, ExpressCacheOptionsRequired} from "./types";
-import type {ExtendedRequest} from "./types/ExtendedRequest";
+import type {
+	CachedResponse,
+	ExpressCacheOptions,
+	ExpressCacheOptionsRequired,
+	ExtendedRequest,
+	StoreCacheResult
+} from "./types";
 
 const emitter = new Emitter();
 
@@ -16,7 +21,7 @@ export const inFlight: Record<string, boolean> = {};
  * @param str The input string to be hashed.
  * @returns The generated hash value.
  */
-export function hashString (str: string): string {
+export function hashString(str: string): string {
 	let hash = 0;
 	for (let i = 0; i < str.length; i++) {
 		const charCode = str.charCodeAt(i);
@@ -25,11 +30,11 @@ export function hashString (str: string): string {
 	return (hash + 2147483647 + 1).toString();
 }
 
-function hasNoCacheHeader (req: Request) {
+function hasNoCacheHeader(req: Request) {
 	return req.get("Cache-Control") === "no-cache";
 }
 
-function respondWithCachedResponse (cachedResponse: CachedResponse, res: Response) {
+function respondWithCachedResponse(cachedResponse: CachedResponse, res: Response) {
 	const cachedBody = cachedResponse.body;
 	const cachedHeaders = cachedResponse.headers;
 	const cachedStatusCode = cachedResponse.statusCode;
@@ -42,7 +47,7 @@ function respondWithCachedResponse (cachedResponse: CachedResponse, res: Respons
 	res.status(cachedStatusCode).send(cachedBody);
 }
 
-function getPoolSize (cacheKey: string) {
+function getPoolSize(cacheKey: string) {
 	const eventListeners = emitter._eventListeners;
 	if (!eventListeners) return 0;
 
@@ -55,7 +60,7 @@ function getPoolSize (cacheKey: string) {
 	return listenersForKeyGlobals.length;
 }
 
-function requestHasPool (cacheKey: string, options: ExpressCacheOptionsRequired) {
+function requestHasPool(cacheKey: string, options: ExpressCacheOptionsRequired) {
 	return options.pooling && inFlight[cacheKey];
 }
 
@@ -68,18 +73,15 @@ function requestHasPool (cacheKey: string, options: ExpressCacheOptionsRequired)
  * @param opts Options for caching.
  * @returns Middleware function.
  */
-export function expressCache (opts: ExpressCacheOptions) {
+export function expressCache(opts: ExpressCacheOptions) {
 	const defaults: Omit<ExpressCacheOptionsRequired, "cache"> = {
 		dependsOn: () => [],
 		timeOutMins: () => 60,
 		shouldGetCache: (): boolean => {
 			return true;
 		},
-		shouldSetCache: (req, res): boolean => {
+		shouldSetCache: (_, res): boolean => {
 			return res.statusCode >= 200 && res.statusCode < 400;
-		},
-		onTimeout: () => {
-			console.log("Cache removed");
 		},
 		onCacheEvent: () => {
 		},
@@ -99,7 +101,6 @@ export function expressCache (opts: ExpressCacheOptions) {
 	const {
 		dependsOn,
 		timeOutMins,
-		onTimeout,
 		onCacheEvent,
 		shouldGetCache,
 		shouldSetCache,
@@ -115,10 +116,10 @@ export function expressCache (opts: ExpressCacheOptions) {
 		const depArrayValues = dependsOn();
 		const shouldGetCacheResult = shouldGetCache(req, res);
 		const missReasons = [];
-		let cachedResponse;
+		let cachedItemContainer;
 
 		if (shouldGetCacheResult === true) {
-			cachedResponse = await cache.get(cacheKey, depArrayValues);
+			cachedItemContainer = await cache.get(cacheKey, depArrayValues);
 		} else {
 			if (typeof shouldGetCacheResult === "string") {
 				missReasons.push(shouldGetCacheResult);
@@ -127,10 +128,16 @@ export function expressCache (opts: ExpressCacheOptions) {
 			}
 		}
 
-		if (!isDisableCacheHeaderPresent && cachedResponse) {
-			onCacheEvent(req, "HIT", cacheUrl);
-			respondWithCachedResponse(cachedResponse, res);
-			onCacheEvent(req, "FINISHED_CACHE_HIT", cacheUrl);
+		if (!isDisableCacheHeaderPresent && cachedItemContainer) {
+			onCacheEvent(req, "HIT", {
+				url: cacheUrl,
+				cachedItemContainer,
+			});
+			respondWithCachedResponse(cachedItemContainer.value, res);
+			onCacheEvent(req, "FINISHED_CACHE_HIT", {
+				url: cacheUrl,
+				cachedItemContainer,
+			});
 			return;
 		}
 
@@ -138,7 +145,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 			missReasons.push("CACHE_CONTROL_HEADER");
 		}
 
-		if (!cachedResponse) {
+		if (!cachedItemContainer) {
 			if (requestHasPool(cacheKey, options)) {
 				missReasons.push(`RESPONSE_POOLED: ${getPoolSize(cacheKey) + 1}`);
 			} else {
@@ -146,7 +153,10 @@ export function expressCache (opts: ExpressCacheOptions) {
 			}
 		}
 
-		onCacheEvent(req, "MISS", cacheUrl, missReasons.join("; "));
+		onCacheEvent(req, "MISS", {
+			url: cacheUrl,
+			reason: missReasons.join("; "),
+		});
 		const originalSend = res.send;
 		const originalJson = res.json;
 
@@ -183,7 +193,7 @@ export function expressCache (opts: ExpressCacheOptions) {
 		}
 
 		const resolvePool = (bodyContent: string, isJson = false) => {
-			const finalResponse: CachedResponse = {
+			const finalResponse: Required<CachedResponse> = {
 				body: isJson ? JSON.stringify(bodyContent) : bodyContent,
 				headers: JSON.stringify(res.getHeaders()),
 				statusCode: res.statusCode,
@@ -192,25 +202,40 @@ export function expressCache (opts: ExpressCacheOptions) {
 
 			if (options.pooling) {
 				delete inFlight[cacheKey];
-				onCacheEvent(req, "POOL_SEND", cacheUrl, `POOL_SIZE: ${getPoolSize(cacheKey)}`);
+				onCacheEvent(req, "POOL_SEND", {
+					url: cacheUrl,
+					reason: `POOL_SIZE: ${getPoolSize(cacheKey)}`,
+				});
 			}
 
 			emitter.emit(cacheKey, finalResponse);
 		};
 
-		const storeCache = async (bodyContent: string, isJson = false): Promise<boolean> => {
+		const storeCache = async (bodyContent: string, isJson = false): Promise<StoreCacheResult> => {
 			// Check the status code before storing
 			const shouldCacheResult = shouldSetCache(req, res);
 			if (shouldCacheResult !== true) {
 				resolvePool(bodyContent, isJson);
 
 				if (typeof shouldCacheResult === "string") {
-					onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`);
-					return false;
+					onCacheEvent(req, "NOT_STORED", {
+						url: cacheUrl,
+						reason: `STATUS_CODE (${res.statusCode}); ${shouldCacheResult}`,
+					});
+
+					return {
+						didStore: false
+					};
 				}
 
-				onCacheEvent(req, "NOT_STORED", cacheUrl, `STATUS_CODE (${res.statusCode})`);
-				return false;
+				onCacheEvent(req, "NOT_STORED", {
+					url: cacheUrl,
+					reason: `STATUS_CODE (${res.statusCode})`
+				});
+
+				return {
+					didStore: false
+				};
 			}
 
 			const cachedResponse: CachedResponse = {
@@ -220,24 +245,37 @@ export function expressCache (opts: ExpressCacheOptions) {
 				requestUrl: req.originalUrl || req.url,
 			};
 
-			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeOutMins(req), onTimeout, depArrayValues);
+			const timeoutMins = timeOutMins(req);
+			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeoutMins, depArrayValues);
 
 			if (cachedSuccessfully) {
-				onCacheEvent(req, "STORED", cacheUrl);
+				onCacheEvent(req, "STORED", {
+					url: cacheUrl,
+				});
 			} else {
-				onCacheEvent(req, "NOT_STORED", cacheUrl, "CACHE_UNAVAILABLE");
+				onCacheEvent(req, "NOT_STORED", {
+					url: cacheUrl,
+					reason: "CACHE_UNAVAILABLE",
+				});
 			}
 
 			resolvePool(bodyContent, isJson);
-			return true;
+
+			return {
+				didStore: true,
+			};
 		};
 
 		res.send = function (body) {
-			storeCache(body, typeof body === "object").then((didStore) => {
+			storeCache(body, typeof body === "object").then(({didStore}) => {
 				if (didStore) {
-					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", cacheUrl);
+					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", {
+						url: cacheUrl,
+					});
 				} else {
-					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", cacheUrl);
+					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", {
+						url: cacheUrl,
+					});
 				}
 			});
 			originalSend.call(this, body);
@@ -245,11 +283,15 @@ export function expressCache (opts: ExpressCacheOptions) {
 		};
 
 		res.json = function (body) {
-			storeCache(body, true).then((didStore) => {
+			storeCache(body, true).then(({didStore}) => {
 				if (didStore) {
-					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", cacheUrl);
+					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_STORED", {
+						url: cacheUrl,
+					});
 				} else {
-					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", cacheUrl);
+					onCacheEvent(req, "FINISHED_CACHE_MISS_AND_NOT_STORED", {
+						url: cacheUrl
+					});
 				}
 			});
 			originalJson.call(this, body);
