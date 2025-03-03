@@ -22,7 +22,7 @@ function hashString(str) {
 function hasNoCacheHeader(req) {
     return req.get("Cache-Control") === "no-cache";
 }
-function respondWithCachedResponse(cachedResponse, res) {
+function respondWithCachedResponse(cachedResponse, res, resultHeaderValue = "HIT") {
     if (res.headersSent) {
         // The connection has already had a response stopped
         console.error("Could not resolve response in pooled request because headers were already sent. Did we take too long and express closed the request already?");
@@ -34,6 +34,7 @@ function respondWithCachedResponse(cachedResponse, res) {
     // Set headers that we cached
     if (cachedHeaders) {
         res.set(JSON.parse(cachedHeaders));
+        res.set("x-cache-result", resultHeaderValue);
     }
     res.status(cachedStatusCode).send(cachedBody);
 }
@@ -101,6 +102,19 @@ function expressCache(opts) {
         const shouldGetCacheResult = shouldGetCache(req, res);
         const missReasons = [];
         let cachedItemContainer;
+        // Check if the no-pool header is present
+        const noPoolHeader = req.get("x-cache-do-no-pool") === "true";
+        // If we have a no-pool header, check if there is a pool for this request
+        if (noPoolHeader && requestHasPool(cacheKey, options)) {
+            // A pool exists and the no-pool header is present, see if we
+            // can respond with a cached result instead
+            const tmpCachedItemContainer = await cache.get(cacheKey, depArrayValues);
+            if (tmpCachedItemContainer) {
+                // A cached result exists, respond with it instead of pooling
+                respondWithCachedResponse(tmpCachedItemContainer.value, res);
+                return;
+            }
+        }
         if (shouldGetCacheResult === true) {
             cachedItemContainer = await cache.get(cacheKey, depArrayValues);
         }
@@ -144,7 +158,7 @@ function expressCache(opts) {
             const respondHandler = (cachedResponse) => {
                 // The event was fired indicating we have a response to the request
                 clearTimeout(requestTimeout);
-                respondWithCachedResponse(cachedResponse, res);
+                respondWithCachedResponse(cachedResponse, res, "POOLED");
             };
             // Set a timeout on the pool to ensure we don't hang it forever
             const requestTimeout = setTimeout(() => {
@@ -241,6 +255,7 @@ function expressCache(opts) {
                     });
                 }
             });
+            res.set("x-cache-result", "MISS");
             originalSend.call(this, body);
             return res;
         };
@@ -257,6 +272,7 @@ function expressCache(opts) {
                     });
                 }
             });
+            res.set("x-cache-result", "MISS");
             originalJson.call(this, body);
             return res;
         };
@@ -277,7 +293,7 @@ function expiryFromMins(timeoutMins) {
     };
 }
 
-var version = "4.3.5";
+var version = "4.3.6";
 
 /**
  * MemoryCache class for caching data in memory.
