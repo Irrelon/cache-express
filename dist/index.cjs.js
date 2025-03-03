@@ -36,8 +36,10 @@ function respondWithCachedResponse(cachedResponse, res, resultHeaderValue = "HIT
     // Set headers that we cached
     if (cachedHeaders) {
         res.set(JSON.parse(cachedHeaders));
-        res.set("x-cache-result", resultHeaderValue);
     }
+    // Reset the encoding because we don't cache gzipped data
+    res.set("content-encoding", "identity");
+    res.set("x-cache-result", resultHeaderValue);
     res.status(cachedStatusCode).send(cachedBody);
 }
 function getPoolSize(cacheKey) {
@@ -295,7 +297,7 @@ function expiryFromMins(timeoutMins) {
     };
 }
 
-var version = "4.3.8";
+var version = "4.3.9";
 
 /**
  * MemoryCache class for caching data in memory.

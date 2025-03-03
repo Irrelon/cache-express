@@ -47,9 +47,11 @@ function respondWithCachedResponse(cachedResponse: CachedResponse, res: Response
 	// Set headers that we cached
 	if (cachedHeaders) {
 		res.set(JSON.parse(cachedHeaders));
-		res.set("x-cache-result", resultHeaderValue);
 	}
 
+	// Reset the encoding because we don't cache gzipped data
+	res.set("content-encoding", "identity");
+	res.set("x-cache-result", resultHeaderValue);
 	res.status(cachedStatusCode).send(cachedBody);
 }
 
