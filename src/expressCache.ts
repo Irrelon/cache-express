@@ -136,7 +136,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 		let cachedItemContainer;
 
 		// Check if the no-pool header is present
-		const noPoolHeader = req.get("x-cache-do-no-pool") === "true";
+		const noPoolHeader = req.get("x-cache-do-not-pool") === "true";
 
 		// If we have a no-pool header, check if there is a pool for this request
 		if (noPoolHeader && requestHasPool(cacheKey, options)) {

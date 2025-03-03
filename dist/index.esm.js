@@ -103,7 +103,7 @@ function expressCache(opts) {
         const missReasons = [];
         let cachedItemContainer;
         // Check if the no-pool header is present
-        const noPoolHeader = req.get("x-cache-do-no-pool") === "true";
+        const noPoolHeader = req.get("x-cache-do-not-pool") === "true";
         // If we have a no-pool header, check if there is a pool for this request
         if (noPoolHeader && requestHasPool(cacheKey, options)) {
             // A pool exists and the no-pool header is present, see if we
@@ -293,7 +293,7 @@ function expiryFromMins(timeoutMins) {
     };
 }
 
-var version = "4.3.7";
+var version = "4.3.8";
 
 /**
  * MemoryCache class for caching data in memory.
