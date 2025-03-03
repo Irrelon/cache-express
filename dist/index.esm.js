@@ -23,6 +23,11 @@ function hasNoCacheHeader(req) {
     return req.get("Cache-Control") === "no-cache";
 }
 function respondWithCachedResponse(cachedResponse, res) {
+    if (res.headersSent) {
+        // The connection has already had a response stopped
+        console.error("Could not resolve response in pooled request because headers were already sent. Did we take too long and express closed the request already?");
+        return;
+    }
     const cachedBody = cachedResponse.body;
     const cachedHeaders = cachedResponse.headers;
     const cachedStatusCode = cachedResponse.statusCode;
@@ -60,11 +65,20 @@ function expressCache(opts) {
     const defaults = {
         dependsOn: () => [],
         timeOutMins: () => 60,
-        shouldGetCache: () => {
+        shouldGetCache: (req) => {
+            const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
+            if (isDisableCacheHeaderPresent) {
+                // When we return a string it is the same as returning `false` but also
+                // provides a reason that goes in the log
+                return "CACHE_CONTROL_HEADER";
+            }
             return true;
         },
         shouldSetCache: (_, res) => {
-            return res.statusCode >= 200 && res.statusCode < 400;
+            if (res.statusCode >= 200 && res.statusCode < 400) {
+                return true;
+            }
+            return "STATUS_CODE_NOT_2XX_3XX";
         },
         onCacheEvent: () => {
         },
@@ -82,7 +96,6 @@ function expressCache(opts) {
     const { dependsOn, timeOutMins, onCacheEvent, shouldGetCache, shouldSetCache, provideCacheKey, requestTimeoutMs, cache } = options;
     return async function (req, res, next) {
         const cacheUrl = req.originalUrl || req.url;
-        const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
         const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
         const depArrayValues = dependsOn();
         const shouldGetCacheResult = shouldGetCache(req, res);
@@ -99,7 +112,7 @@ function expressCache(opts) {
                 missReasons.push("SHOULD_GET_CACHE_FALSE");
             }
         }
-        if (!isDisableCacheHeaderPresent && cachedItemContainer) {
+        if (cachedItemContainer) {
             onCacheEvent(req, "HIT", {
                 url: cacheUrl,
                 cachedItemContainer,
@@ -110,9 +123,6 @@ function expressCache(opts) {
                 cachedItemContainer,
             });
             return;
-        }
-        if (isDisableCacheHeaderPresent) {
-            missReasons.push("CACHE_CONTROL_HEADER");
         }
         if (!cachedItemContainer) {
             if (requestHasPool(cacheKey, options)) {
@@ -266,7 +276,7 @@ function expiryFromMins(timeoutMins) {
     };
 }
 
-var version = "4.3.2";
+var version = "4.3.3";
 
 /**
  * MemoryCache class for caching data in memory.

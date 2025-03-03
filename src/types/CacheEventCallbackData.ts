@@ -1,14 +1,7 @@
 import type {CachedItemContainer} from "./CachedItemContainer";
 
-export interface CacheHitEventCallbackData {
+export interface CacheEventCallbackData {
 	url: string;
 	reason?: string;
-	cachedItemContainer: CachedItemContainer,
+	cachedItemContainer?: CachedItemContainer,
 }
-
-export interface CacheMissEventCallbackData {
-	url: string;
-	reason?: string;
-}
-
-export type CacheEventCallbackData = CacheHitEventCallbackData | CacheMissEventCallbackData;

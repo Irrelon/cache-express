@@ -45,16 +45,11 @@ interface CachedItemContainer {
     };
 }
 
-interface CacheHitEventCallbackData {
+interface CacheEventCallbackData {
     url: string;
     reason?: string;
-    cachedItemContainer: CachedItemContainer;
+    cachedItemContainer?: CachedItemContainer;
 }
-interface CacheMissEventCallbackData {
-    url: string;
-    reason?: string;
-}
-type CacheEventCallbackData = CacheHitEventCallbackData | CacheMissEventCallbackData;
 
 /**
  * @param req The request that caused the event.
@@ -261,4 +256,4 @@ declare class RedisCache implements CacheInterface {
     dependenciesChanged(key: string, depArrayValues: any[]): boolean;
 }
 
-export { type CacheEvent, type CacheEventCallback, type CacheEventCallbackData, type CacheHitEventCallbackData, type CacheInterface, type CacheMissEventCallbackData, type CachedResponse, type ExpressCacheOptions, type ExpressCacheOptionsRequired, type ExtendedRequest, MemoryCache, RedisCache, type RedisCacheConstructorOptions, type StoreCacheNegativeResult, type StoreCachePositiveResult, type StoreCacheResult, expressCache, hashString, inFlight };
+export { type CacheEvent, type CacheEventCallback, type CacheEventCallbackData, type CacheInterface, type CachedResponse, type ExpressCacheOptions, type ExpressCacheOptionsRequired, type ExtendedRequest, MemoryCache, RedisCache, type RedisCacheConstructorOptions, type StoreCacheNegativeResult, type StoreCachePositiveResult, type StoreCacheResult, expressCache, hashString, inFlight };

@@ -35,6 +35,11 @@ function hasNoCacheHeader(req: Request) {
 }
 
 function respondWithCachedResponse(cachedResponse: CachedResponse, res: Response) {
+	if (res.headersSent) {
+		// The connection has already had a response stopped
+		console.error("Could not resolve response in pooled request because headers were already sent. Did we take too long and express closed the request already?");
+		return;
+	}
 	const cachedBody = cachedResponse.body;
 	const cachedHeaders = cachedResponse.headers;
 	const cachedStatusCode = cachedResponse.statusCode;
@@ -77,11 +82,23 @@ export function expressCache(opts: ExpressCacheOptions) {
 	const defaults: Omit<ExpressCacheOptionsRequired, "cache"> = {
 		dependsOn: () => [],
 		timeOutMins: () => 60,
-		shouldGetCache: (): boolean => {
+		shouldGetCache: (req) => {
+			const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
+
+			if (isDisableCacheHeaderPresent) {
+				// When we return a string it is the same as returning `false` but also
+				// provides a reason that goes in the log
+				return "CACHE_CONTROL_HEADER";
+			}
+
 			return true;
 		},
-		shouldSetCache: (_, res): boolean => {
-			return res.statusCode >= 200 && res.statusCode < 400;
+		shouldSetCache: (_, res) => {
+			if (res.statusCode >= 200 && res.statusCode < 400) {
+				return true;
+			}
+
+			return "STATUS_CODE_NOT_2XX_3XX";
 		},
 		onCacheEvent: () => {
 		},
@@ -111,7 +128,6 @@ export function expressCache(opts: ExpressCacheOptions) {
 
 	return async function (req: ExtendedRequest, res: Response, next: NextFunction) {
 		const cacheUrl = req.originalUrl || req.url;
-		const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
 		const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
 		const depArrayValues = dependsOn();
 		const shouldGetCacheResult = shouldGetCache(req, res);
@@ -128,7 +144,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 			}
 		}
 
-		if (!isDisableCacheHeaderPresent && cachedItemContainer) {
+		if (cachedItemContainer) {
 			onCacheEvent(req, "HIT", {
 				url: cacheUrl,
 				cachedItemContainer,
@@ -139,10 +155,6 @@ export function expressCache(opts: ExpressCacheOptions) {
 				cachedItemContainer,
 			});
 			return;
-		}
-
-		if (isDisableCacheHeaderPresent) {
-			missReasons.push("CACHE_CONTROL_HEADER");
 		}
 
 		if (!cachedItemContainer) {
