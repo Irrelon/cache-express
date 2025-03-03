@@ -261,4 +261,4 @@ declare class RedisCache implements CacheInterface {
     dependenciesChanged(key: string, depArrayValues: any[]): boolean;
 }
 
-export { type CacheEvent, type CacheEventCallback, type CacheEventCallbackData, type CacheInterface, type CachedResponse, type ExpressCacheOptions, type ExpressCacheOptionsRequired, type ExtendedRequest, MemoryCache, RedisCache, type RedisCacheConstructorOptions, type StoreCacheNegativeResult, type StoreCachePositiveResult, type StoreCacheResult, expressCache, hashString, inFlight };
+export { type CacheEvent, type CacheEventCallback, type CacheEventCallbackData, type CacheInterface, type CachedItemContainer, type CachedResponse, type ExpressCacheOptions, type ExpressCacheOptionsRequired, type ExtendedRequest, MemoryCache, RedisCache, type RedisCacheConstructorOptions, type StoreCacheNegativeResult, type StoreCachePositiveResult, type StoreCacheResult, expressCache, hashString, inFlight };

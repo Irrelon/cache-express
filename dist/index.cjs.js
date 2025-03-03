@@ -279,7 +279,7 @@ function expiryFromMins(timeoutMins) {
     };
 }
 
-var version = "4.3.4";
+var version = "4.3.5";
 
 /**
  * MemoryCache class for caching data in memory.
