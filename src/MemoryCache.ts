@@ -47,7 +47,7 @@ export class MemoryCache implements CacheInterface {
 	 * @param timeoutMins Timeout in minutes.
 	 * @param dependencies Dependency values for cache checking.
 	 */
-	async set(key: string, value: any, timeoutMins: number = 0, dependencies: any[] = []) {
+	async set(key: string, value: any, timeoutMins: number = 0, dependencies: any[] = []): Promise<CachedItemContainer | false> {
 		this.dependencies[key] = dependencies;
 
 		const expiry = expiryFromMins(timeoutMins);
@@ -63,7 +63,7 @@ export class MemoryCache implements CacheInterface {
 					modelVersion: version
 				}
 			};
-			return true;
+			return this.cache[key];
 		}
 
 		// Check if the timeout is greater than the max 32-bit signed integer value
@@ -86,7 +86,7 @@ export class MemoryCache implements CacheInterface {
 			}
 		}, timeoutMs);
 
-		return true;
+		return this.cache[key];
 	}
 
 	/**

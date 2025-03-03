@@ -20,6 +20,11 @@ interface ExtendedRequest extends Request {
 
 interface ExpiryData {
     /**
+     * If the timeout data included timeoutMins greater
+     * than zero this flag will be true, false otherwise.
+     */
+    expiryEnabled: boolean;
+    /**
      * The number of minutes to cache for.
      */
     timeoutMins: number;
@@ -65,7 +70,7 @@ type CacheEventCallback = (req: ExtendedRequest, evt: CacheEvent, data: CacheEve
  */
 interface CacheInterface {
     get: (key: string, depArrayValues: any[]) => Promise<CachedItemContainer | null>;
-    set: (key: string, value: CachedResponse, timeoutMins: number, dependencies: any[]) => Promise<boolean>;
+    set: (key: string, value: CachedResponse, timeoutMins: number, dependencies: any[]) => Promise<CachedItemContainer | false>;
     has: (key: string) => Promise<boolean>;
     remove: (key: string) => Promise<boolean>;
 }
@@ -192,7 +197,7 @@ declare class MemoryCache implements CacheInterface {
      * @param timeoutMins Timeout in minutes.
      * @param dependencies Dependency values for cache checking.
      */
-    set(key: string, value: any, timeoutMins?: number, dependencies?: any[]): Promise<boolean>;
+    set(key: string, value: any, timeoutMins?: number, dependencies?: any[]): Promise<CachedItemContainer | false>;
     /**
      * Checks if a key exists in the cache.
      * @param key The cache key to check.
@@ -235,7 +240,7 @@ declare class RedisCache implements CacheInterface {
      * @param timeoutMins Timeout in minutes.
      * @param dependencies Dependency values for cache checking.
      */
-    set(key: string, value: any, timeoutMins?: number, dependencies?: any[]): Promise<boolean>;
+    set(key: string, value: any, timeoutMins?: number, dependencies?: any[]): Promise<CachedItemContainer | false>;
     /**
      * Removes a value from the cache.
      * @param key The cache key to remove.

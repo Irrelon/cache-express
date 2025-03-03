@@ -7,7 +7,7 @@ import type {CachedItemContainer} from "./CachedItemContainer";
  */
 export interface CacheInterface {
 	get: (key: string, depArrayValues: any[]) => Promise<CachedItemContainer | null>;
-	set: (key: string, value: CachedResponse, timeoutMins: number, dependencies: any[]) => Promise<boolean>;
+	set: (key: string, value: CachedResponse, timeoutMins: number, dependencies: any[]) => Promise<CachedItemContainer | false>;
 	has: (key: string) => Promise<boolean>;
 	remove: (key: string) => Promise<boolean>;
 }

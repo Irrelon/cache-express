@@ -1,5 +1,10 @@
 export interface ExpiryData {
 	/**
+	 * If the timeout data included timeoutMins greater
+	 * than zero this flag will be true, false otherwise.
+	 */
+	expiryEnabled: boolean;
+	/**
 	 * The number of minutes to cache for.
 	 */
 	timeoutMins: number;

@@ -269,6 +269,7 @@ function expiryFromMins(timeoutMins) {
     const expireTime = Date.now() + timeoutMs;
     const expireAt = new Date(expireTime).toISOString();
     return {
+        expiryEnabled: Boolean(timeoutMins),
         timeoutMins,
         timeoutMs,
         expiresTime: expireTime,
@@ -276,7 +277,7 @@ function expiryFromMins(timeoutMins) {
     };
 }
 
-var version = "4.3.3";
+var version = "4.3.4";
 
 /**
  * MemoryCache class for caching data in memory.
@@ -328,7 +329,7 @@ class MemoryCache {
                     modelVersion: version
                 }
             };
-            return true;
+            return this.cache[key];
         }
         // Check if the timeout is greater than the max 32-bit signed integer value
         // that setTimeout accepts
@@ -347,7 +348,7 @@ class MemoryCache {
                 this.remove(key);
             }
         }, timeoutMs);
-        return true;
+        return this.cache[key];
     }
     /**
      * Checks if a key exists in the cache.
@@ -460,10 +461,6 @@ class RedisCache {
             return false;
         }
         this.dependencies[key] = dependencies;
-        if (!timeoutMins) {
-            await this.client.set(key, JSON.stringify({ value }));
-            return true;
-        }
         const expiry = expiryFromMins(timeoutMins);
         const { expiresTime, } = expiry;
         const cachedItemContainer = {
@@ -473,8 +470,9 @@ class RedisCache {
                 modelVersion: version
             }
         };
-        await this.client.set(key, JSON.stringify(cachedItemContainer), { PXAT: expiresTime });
-        return true;
+        const expiryOption = timeoutMins ? { PXAT: expiresTime } : undefined;
+        await this.client.set(key, JSON.stringify(cachedItemContainer), expiryOption);
+        return cachedItemContainer;
     }
     /**
      * Removes a value from the cache.

@@ -80,18 +80,13 @@ export class RedisCache implements CacheInterface {
 	 * @param timeoutMins Timeout in minutes.
 	 * @param dependencies Dependency values for cache checking.
 	 */
-	async set(key: string, value: any, timeoutMins: number = 0, dependencies: any[] = []): Promise<boolean> {
+	async set(key: string, value: any, timeoutMins: number = 0, dependencies: any[] = []): Promise<CachedItemContainer | false> {
 		if (!this.client.isOpen || !this.client.isReady) {
 			// The redis connection is not open or ready, don't store anything
 			return false;
 		}
 
 		this.dependencies[key] = dependencies;
-
-		if (!timeoutMins) {
-			await this.client.set(key, JSON.stringify({value}));
-			return true;
-		}
 
 		const expiry = expiryFromMins(timeoutMins);
 		const {
@@ -106,9 +101,11 @@ export class RedisCache implements CacheInterface {
 			}
 		};
 
-		await this.client.set(key, JSON.stringify(cachedItemContainer), {PXAT: expiresTime});
+		const expiryOption = timeoutMins ? {PXAT: expiresTime} : undefined;
 
-		return true;
+		await this.client.set(key, JSON.stringify(cachedItemContainer), expiryOption);
+
+		return cachedItemContainer;
 	}
 
 	/**

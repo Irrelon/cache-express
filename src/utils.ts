@@ -6,6 +6,7 @@ export function expiryFromMins (timeoutMins: number): ExpiryData {
 	const expireAt = new Date(expireTime).toISOString();
 
 	return {
+		expiryEnabled: Boolean(timeoutMins),
 		timeoutMins,
 		timeoutMs,
 		expiresTime: expireTime,
