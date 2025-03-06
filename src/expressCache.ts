@@ -97,11 +97,11 @@ export function expressCache(opts: ExpressCacheOptions) {
 			return true;
 		},
 		shouldSetCache: (_, res) => {
-			if (res.statusCode >= 200 && res.statusCode < 400) {
+			if (res.statusCode >= 200 && res.statusCode < 300) {
 				return true;
 			}
 
-			return "STATUS_CODE_NOT_2XX_3XX";
+			return "STATUS_CODE_NOT_2XX";
 		},
 		onCacheEvent: () => {
 		},
