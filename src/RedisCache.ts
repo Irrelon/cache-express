@@ -1,7 +1,6 @@
-import type {CacheInterface, RedisCacheConstructorOptions} from "./types";
+import type {CacheInterface, CacheSetOptions, RedisCacheConstructorOptions, CachedItemContainer} from "./types";
 import type {RedisClientType} from "redis";
 import {expiryFromMins} from "./utils";
-import type {CachedItemContainer} from "./types/CachedItemContainer";
 import {version} from "../package.json";
 
 /**
@@ -25,10 +24,9 @@ export class RedisCache implements CacheInterface {
 	/**
 	 * Retrieves a value from the cache.
 	 * @param key The cache key.
-	 * @param depArrayValues Dependency values for cache checking.
 	 * @returns The cached value if found and not expired, otherwise null.
 	 */
-	async get(key: string, depArrayValues: any[] = []): Promise<CachedItemContainer | null> {
+	async get(key: string): Promise<CachedItemContainer | null> {
 		if (!this.client.isOpen || !this.client.isReady) {
 			// The redis connection is not open or ready, return null
 			// which will essentially signal no cache and regenerate the request
@@ -38,16 +36,6 @@ export class RedisCache implements CacheInterface {
 		const data = await this.client.get(key);
 
 		if (!data) {
-			return null;
-		}
-
-		// At this point, we know data exists for the cache key so check
-		// if any dependencies have changed and if so, clear the existing
-		// cache data
-		const checkDepsChanged = this.dependenciesChanged(key, depArrayValues);
-
-		if (checkDepsChanged) {
-			void this.remove(key);
 			return null;
 		}
 
@@ -78,30 +66,28 @@ export class RedisCache implements CacheInterface {
 	 * @param key The cache key.
 	 * @param value The value to cache.
 	 * @param timeoutMins Timeout in minutes.
-	 * @param dependencies Dependency values for cache checking.
+	 * @param [options] Options object.
 	 */
-	async set(key: string, value: any, timeoutMins: number = 0, dependencies: any[] = []): Promise<CachedItemContainer | false> {
+	async set(key: string, value: any, timeoutMins: number = 0, options?: CacheSetOptions): Promise<CachedItemContainer | false> {
 		if (!this.client.isOpen || !this.client.isReady) {
 			// The redis connection is not open or ready, don't store anything
 			return false;
 		}
 
-		this.dependencies[key] = dependencies;
-
 		const expiry = expiryFromMins(timeoutMins);
-		const {
-			expiresTime,
-		} = expiry;
+		const { expiresTime } = expiry;
 
 		const cachedItemContainer: CachedItemContainer = {
+			...(options?.containerData || {}),
 			value,
 			metaData: {
+				...(options?.metaData || {}),
 				expiry,
-				modelVersion: version
+				modelVersion: version,
 			}
 		};
 
-		const expiryOption = timeoutMins ? {PXAT: expiresTime} : undefined;
+		const expiryOption = timeoutMins ? {"PXAT": expiresTime} : undefined;
 
 		await this.client.set(key, JSON.stringify(cachedItemContainer), expiryOption);
 
@@ -138,29 +124,5 @@ export class RedisCache implements CacheInterface {
 		if (!this.client.isOpen) return false;
 		const result = await this.client.exists(key);
 		return result === 1;
-	}
-
-	/**
-	 * Checks if the dependencies have changed.
-	 * @param key The cache key.
-	 * @param depArrayValues Dependency values to compare.
-	 * @returns True if the dependencies have changed, otherwise false.
-	 */
-	dependenciesChanged(key: string, depArrayValues: any[]): boolean {
-		const dependencies = this.dependencies[key];
-
-		if (!dependencies) {
-			return false;
-		}
-
-		const check =
-			JSON.stringify(dependencies) === JSON.stringify(depArrayValues);
-
-		if (check) {
-			return false;
-		} else {
-			this.dependencies[key] = depArrayValues;
-			return true;
-		}
 	}
 }

@@ -83,7 +83,6 @@ function requestHasPool(cacheKey: string, options: ExpressCacheOptionsRequired) 
  */
 export function expressCache(opts: ExpressCacheOptions) {
 	const defaults: Omit<ExpressCacheOptionsRequired, "cache"> = {
-		dependsOn: () => [],
 		timeOutMins: () => 60,
 		shouldGetCache: (req) => {
 			const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
@@ -110,7 +109,9 @@ export function expressCache(opts: ExpressCacheOptions) {
 		},
 		requestTimeoutMs: 20000,
 		compression: false,
-		pooling: true
+		pooling: true,
+		containerData: {},
+		metaData: {}
 	};
 
 	const options: ExpressCacheOptionsRequired = {
@@ -119,20 +120,20 @@ export function expressCache(opts: ExpressCacheOptions) {
 	};
 
 	const {
-		dependsOn,
 		timeOutMins,
 		onCacheEvent,
 		shouldGetCache,
 		shouldSetCache,
 		provideCacheKey,
 		requestTimeoutMs,
-		cache
+		cache,
+		containerData,
+		metaData,
 	} = options;
 
 	return async function (req: ExtendedRequest, res: Response, next: NextFunction) {
 		const cacheUrl = req.originalUrl || req.url;
 		const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
-		const depArrayValues = dependsOn();
 		const shouldGetCacheResult = shouldGetCache(req, res);
 		const missReasons = [];
 		let cachedItemContainer;
@@ -144,7 +145,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 		if (noPoolHeader && requestHasPool(cacheKey, options)) {
 			// A pool exists and the no-pool header is present, see if we
 			// can respond with a cached result instead
-			const tmpCachedItemContainer = await cache.get(cacheKey, depArrayValues);
+			const tmpCachedItemContainer = await cache.get(cacheKey);
 
 			if (tmpCachedItemContainer) {
 				// A cached result exists, respond with it instead of pooling
@@ -154,7 +155,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 		}
 
 		if (shouldGetCacheResult === true) {
-			cachedItemContainer = await cache.get(cacheKey, depArrayValues);
+			cachedItemContainer = await cache.get(cacheKey);
 		} else {
 			if (typeof shouldGetCacheResult === "string") {
 				missReasons.push(shouldGetCacheResult);
@@ -277,7 +278,10 @@ export function expressCache(opts: ExpressCacheOptions) {
 			};
 
 			const timeoutMins = timeOutMins(req);
-			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeoutMins, depArrayValues);
+			const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeoutMins, {
+				containerData,
+				metaData
+			});
 
 			if (cachedSuccessfully) {
 				onCacheEvent(req, "STORED", {

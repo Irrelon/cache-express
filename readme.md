@@ -77,7 +77,6 @@ const app = express();
 app.get(
 	"/api/data",
 	expressCache({
-		dependsOn: () => [getUserID()],
 		timeOutMins: 1, // Cache for 1 minute
 	}),
 	(req, res) => {
@@ -89,7 +88,6 @@ app.get(
 
 // Or you can create a middleWare configuration beforehand:
 let postsCache = expressCache({
-	dependsOn: () => [postCount],
 	timeOutMins: 1,
 });
 
@@ -102,23 +100,6 @@ app.get("/api/posts", postsCache, (req, res) => {
 app.listen(3000, () => {
 	console.log("Server is running on port 3000");
 });
-```
-
-### Dependency-Based Cache Invalidation
-
-The middleware supports dependency-based cache invalidation.
-You can specify dependencies for your cached data, and the
-cache will be automatically invalidated if any of the
-dependencies change. `dependsOn` should be a function
-that returns an array including your dependency values.
-
-```javascript
-app.get(
-	"/api/data",
-	expressCache({
-		dependsOn: () => [value1, value2],
-	})
-);
 ```
 
 #### Examples
@@ -145,17 +126,6 @@ app.get(
    	"/api/data",
    	expressCache({
    		timeOutMins: 1, // Cache for 1 minute
-   	})
-   );
-   ```
-
-3. Dependency-Based Invalidation:
-
-   ```javascript
-   app.get(
-   	"/api/user",
-   	expressCache({
-   		dependsOn: () => [getUserID()],
    	})
    );
    ```

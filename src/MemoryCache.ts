@@ -2,6 +2,7 @@ import type {CacheInterface} from "./types/CacheInterface";
 import {expiryFromMins} from "./utils";
 import type {CachedItemContainer} from "./types/CachedItemContainer";
 import {version} from "../package.json";
+import type {CacheSetOptions} from "./types";
 
 /**
  * MemoryCache class for caching data in memory.
@@ -20,17 +21,10 @@ export class MemoryCache implements CacheInterface {
 	/**
 	 * Retrieves a value from the cache.
 	 * @param key The cache key.
-	 * @param depArrayValues Dependency values for cache checking.
 	 * @returns The cached value if found and not expired, otherwise null.
 	 */
-	async get(key: string, depArrayValues: any[]) {
+	async get(key: string) {
 		const item = this.cache[key];
-		const checkDepsChanged = this.dependenciesChanged(key, depArrayValues);
-
-		if (checkDepsChanged) {
-			void this.remove(key);
-			return null;
-		}
 
 		if (!item || (item.metaData.expiry.expiresTime > 0 && item.metaData.expiry.expiresTime <= Date.now())) {
 			void this.remove(key);
@@ -45,26 +39,13 @@ export class MemoryCache implements CacheInterface {
 	 * @param key The cache key.
 	 * @param value The value to cache.
 	 * @param timeoutMins Timeout in minutes.
-	 * @param dependencies Dependency values for cache checking.
+	 * @param [options] Options object.
 	 */
-	async set(key: string, value: any, timeoutMins: number = 0, dependencies: any[] = []): Promise<CachedItemContainer | false> {
-		this.dependencies[key] = dependencies;
-
+	async set(key: string, value: any, timeoutMins: number = 0, options?: CacheSetOptions): Promise<CachedItemContainer | false> {
 		const expiry = expiryFromMins(timeoutMins);
 		const {
 			timeoutMs,
 		} = expiry;
-
-		if (!timeoutMins) {
-			this.cache[key] = {
-				value,
-				metaData: {
-					expiry,
-					modelVersion: version
-				}
-			};
-			return this.cache[key];
-		}
 
 		// Check if the timeout is greater than the max 32-bit signed integer value
 		// that setTimeout accepts
@@ -73,12 +54,18 @@ export class MemoryCache implements CacheInterface {
 		}
 
 		this.cache[key] = {
+			...(options?.containerData || {}),
 			value,
 			metaData: {
+				...(options?.metaData || {}),
 				expiry,
-				modelVersion: version
+				modelVersion: version,
 			}
 		};
+
+		if (!timeoutMins) {
+			return this.cache[key];
+		}
 
 		this.timers[key] = setTimeout(() => {
 			if (this.cache[key]) {

@@ -1,16 +1,12 @@
-import type {CacheEventCallback, CacheInterface} from "./index";
+import type {CacheEventCallback, CacheInterface, CacheSetOptions} from "./index";
 import type {Response} from "express";
 import type {ExtendedRequest} from "./ExtendedRequest";
 
-export interface ExpressCacheOptions {
+export interface ExpressCacheOptions extends CacheSetOptions {
 	/**
 	 * The caching system to use to store and retrieve cache data.
 	 */
 	cache: CacheInterface;
-	/**
-	 *  A function that returns an array of dependency values for cache checking.
-	 */
-	dependsOn?: () => any[];
 	/**
 	 * Timeout in minutes for cache expiration. Default is 1 hour (60 mins).
 	 * @param {Request} req The current request.

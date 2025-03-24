@@ -9,3 +9,4 @@ export * from "./RedisCacheConstructorOptions";
 export * from "./StoreCacheResult";
 export * from "./CacheEventCallbackData";
 export * from "./CachedItemContainer";
+export * from "./CacheSetOptions";
