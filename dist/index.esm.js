@@ -66,7 +66,6 @@ function requestHasPool(cacheKey, options) {
  */
 function expressCache(opts) {
     const defaults = {
-        dependsOn: () => [],
         timeOutMins: () => 60,
         shouldGetCache: (req) => {
             const isDisableCacheHeaderPresent = hasNoCacheHeader(req);
@@ -90,17 +89,18 @@ function expressCache(opts) {
         },
         requestTimeoutMs: 20000,
         compression: false,
-        pooling: true
+        pooling: true,
+        containerData: {},
+        metaData: {}
     };
     const options = {
         ...defaults,
         ...opts
     };
-    const { dependsOn, timeOutMins, onCacheEvent, shouldGetCache, shouldSetCache, provideCacheKey, requestTimeoutMs, cache } = options;
+    const { timeOutMins, onCacheEvent, shouldGetCache, shouldSetCache, provideCacheKey, requestTimeoutMs, cache, containerData, metaData, } = options;
     return async function (req, res, next) {
         const cacheUrl = req.originalUrl || req.url;
         const cacheKey = req.cacheHash || provideCacheKey(cacheUrl, req);
-        const depArrayValues = dependsOn();
         const shouldGetCacheResult = shouldGetCache(req, res);
         const missReasons = [];
         let cachedItemContainer;
@@ -110,7 +110,7 @@ function expressCache(opts) {
         if (noPoolHeader && requestHasPool(cacheKey, options)) {
             // A pool exists and the no-pool header is present, see if we
             // can respond with a cached result instead
-            const tmpCachedItemContainer = await cache.get(cacheKey, depArrayValues);
+            const tmpCachedItemContainer = await cache.get(cacheKey);
             if (tmpCachedItemContainer) {
                 // A cached result exists, respond with it instead of pooling
                 respondWithCachedResponse(tmpCachedItemContainer.value, res);
@@ -118,7 +118,7 @@ function expressCache(opts) {
             }
         }
         if (shouldGetCacheResult === true) {
-            cachedItemContainer = await cache.get(cacheKey, depArrayValues);
+            cachedItemContainer = await cache.get(cacheKey);
         }
         else {
             if (typeof shouldGetCacheResult === "string") {
@@ -227,7 +227,10 @@ function expressCache(opts) {
                 requestUrl: req.originalUrl || req.url,
             };
             const timeoutMins = timeOutMins(req);
-            const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeoutMins, depArrayValues);
+            const cachedSuccessfully = await cache.set(cacheKey, cachedResponse, timeoutMins, {
+                containerData,
+                metaData
+            });
             if (cachedSuccessfully) {
                 onCacheEvent(req, "STORED", {
                     url: cacheUrl,
@@ -295,7 +298,7 @@ function expiryFromMins(timeoutMins) {
     };
 }
 
-var version = "4.3.10";
+var version = "5.0.0";
 
 /**
  * MemoryCache class for caching data in memory.
@@ -312,16 +315,10 @@ class MemoryCache {
     /**
      * Retrieves a value from the cache.
      * @param key The cache key.
-     * @param depArrayValues Dependency values for cache checking.
      * @returns The cached value if found and not expired, otherwise null.
      */
-    async get(key, depArrayValues) {
+    async get(key) {
         const item = this.cache[key];
-        const checkDepsChanged = this.dependenciesChanged(key, depArrayValues);
-        if (checkDepsChanged) {
-            void this.remove(key);
-            return null;
-        }
         if (!item || (item.metaData.expiry.expiresTime > 0 && item.metaData.expiry.expiresTime <= Date.now())) {
             void this.remove(key);
             return null;
@@ -333,34 +330,28 @@ class MemoryCache {
      * @param key The cache key.
      * @param value The value to cache.
      * @param timeoutMins Timeout in minutes.
-     * @param dependencies Dependency values for cache checking.
+     * @param [options] Options object.
      */
-    async set(key, value, timeoutMins = 0, dependencies = []) {
-        this.dependencies[key] = dependencies;
+    async set(key, value, timeoutMins = 0, options) {
         const expiry = expiryFromMins(timeoutMins);
         const { timeoutMs, } = expiry;
-        if (!timeoutMins) {
-            this.cache[key] = {
-                value,
-                metaData: {
-                    expiry,
-                    modelVersion: version
-                }
-            };
-            return this.cache[key];
-        }
         // Check if the timeout is greater than the max 32-bit signed integer value
         // that setTimeout accepts
         if (timeoutMs > 0x7FFFFFFF) {
             throw new Error("Timeout cannot be greater than 2147483647ms");
         }
         this.cache[key] = {
+            ...(options?.containerData || {}),
             value,
             metaData: {
+                ...(options?.metaData || {}),
                 expiry,
-                modelVersion: version
+                modelVersion: version,
             }
         };
+        if (!timeoutMins) {
+            return this.cache[key];
+        }
         this.timers[key] = setTimeout(() => {
             if (this.cache[key]) {
                 this.remove(key);
@@ -427,10 +418,9 @@ class RedisCache {
     /**
      * Retrieves a value from the cache.
      * @param key The cache key.
-     * @param depArrayValues Dependency values for cache checking.
      * @returns The cached value if found and not expired, otherwise null.
      */
-    async get(key, depArrayValues = []) {
+    async get(key) {
         if (!this.client.isOpen || !this.client.isReady) {
             // The redis connection is not open or ready, return null
             // which will essentially signal no cache and regenerate the request
@@ -438,14 +428,6 @@ class RedisCache {
         }
         const data = await this.client.get(key);
         if (!data) {
-            return null;
-        }
-        // At this point, we know data exists for the cache key so check
-        // if any dependencies have changed and if so, clear the existing
-        // cache data
-        const checkDepsChanged = this.dependenciesChanged(key, depArrayValues);
-        if (checkDepsChanged) {
-            void this.remove(key);
             return null;
         }
         let item;
@@ -471,24 +453,25 @@ class RedisCache {
      * @param key The cache key.
      * @param value The value to cache.
      * @param timeoutMins Timeout in minutes.
-     * @param dependencies Dependency values for cache checking.
+     * @param [options] Options object.
      */
-    async set(key, value, timeoutMins = 0, dependencies = []) {
+    async set(key, value, timeoutMins = 0, options) {
         if (!this.client.isOpen || !this.client.isReady) {
             // The redis connection is not open or ready, don't store anything
             return false;
         }
-        this.dependencies[key] = dependencies;
         const expiry = expiryFromMins(timeoutMins);
-        const { expiresTime, } = expiry;
+        const { expiresTime } = expiry;
         const cachedItemContainer = {
+            ...(options?.containerData || {}),
             value,
             metaData: {
+                ...(options?.metaData || {}),
                 expiry,
-                modelVersion: version
+                modelVersion: version,
             }
         };
-        const expiryOption = timeoutMins ? { PXAT: expiresTime } : undefined;
+        const expiryOption = timeoutMins ? { "PXAT": expiresTime } : undefined;
         await this.client.set(key, JSON.stringify(cachedItemContainer), expiryOption);
         return cachedItemContainer;
     }
@@ -519,26 +502,6 @@ class RedisCache {
             return false;
         const result = await this.client.exists(key);
         return result === 1;
-    }
-    /**
-     * Checks if the dependencies have changed.
-     * @param key The cache key.
-     * @param depArrayValues Dependency values to compare.
-     * @returns True if the dependencies have changed, otherwise false.
-     */
-    dependenciesChanged(key, depArrayValues) {
-        const dependencies = this.dependencies[key];
-        if (!dependencies) {
-            return false;
-        }
-        const check = JSON.stringify(dependencies) === JSON.stringify(depArrayValues);
-        if (check) {
-            return false;
-        }
-        else {
-            this.dependencies[key] = depArrayValues;
-            return true;
-        }
     }
 }
 

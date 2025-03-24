@@ -42,12 +42,12 @@ interface ExpiryData {
     expiresAt: string;
 }
 
-interface CachedItemContainer {
+interface CachedItemContainer extends Record<string, any> {
     value: CachedResponse;
     metaData: {
         expiry: ExpiryData;
         modelVersion: string;
-    };
+    } & Record<string, any>;
 }
 
 interface CacheEventCallbackData {
@@ -64,26 +64,27 @@ interface CacheEventCallbackData {
  */
 type CacheEventCallback = (req: ExtendedRequest, evt: CacheEvent, data: CacheEventCallbackData) => void;
 
+interface CacheSetOptions {
+    containerData?: Record<string, any>;
+    metaData?: Record<string, any>;
+}
+
 /**
  * Implement this interface when creating new cache systems
  * for storing and retrieving cache data in different ways.
  */
 interface CacheInterface {
-    get: (key: string, depArrayValues: any[]) => Promise<CachedItemContainer | null>;
-    set: (key: string, value: CachedResponse, timeoutMins: number, dependencies: any[]) => Promise<CachedItemContainer | false>;
+    get: (key: string) => Promise<CachedItemContainer | null>;
+    set: (key: string, value: CachedResponse, timeoutMins: number, options?: CacheSetOptions) => Promise<CachedItemContainer | false>;
     has: (key: string) => Promise<boolean>;
     remove: (key: string) => Promise<boolean>;
 }
 
-interface ExpressCacheOptions {
+interface ExpressCacheOptions extends CacheSetOptions {
     /**
      * The caching system to use to store and retrieve cache data.
      */
     cache: CacheInterface;
-    /**
-     *  A function that returns an array of dependency values for cache checking.
-     */
-    dependsOn?: () => any[];
     /**
      * Timeout in minutes for cache expiration. Default is 1 hour (60 mins).
      * @param {Request} req The current request.
@@ -186,18 +187,17 @@ declare class MemoryCache implements CacheInterface {
     /**
      * Retrieves a value from the cache.
      * @param key The cache key.
-     * @param depArrayValues Dependency values for cache checking.
      * @returns The cached value if found and not expired, otherwise null.
      */
-    get(key: string, depArrayValues: any[]): Promise<CachedItemContainer | null>;
+    get(key: string): Promise<CachedItemContainer | null>;
     /**
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
      * @param timeoutMins Timeout in minutes.
-     * @param dependencies Dependency values for cache checking.
+     * @param [options] Options object.
      */
-    set(key: string, value: any, timeoutMins?: number, dependencies?: any[]): Promise<CachedItemContainer | false>;
+    set(key: string, value: any, timeoutMins?: number, options?: CacheSetOptions): Promise<CachedItemContainer | false>;
     /**
      * Checks if a key exists in the cache.
      * @param key The cache key to check.
@@ -229,18 +229,17 @@ declare class RedisCache implements CacheInterface {
     /**
      * Retrieves a value from the cache.
      * @param key The cache key.
-     * @param depArrayValues Dependency values for cache checking.
      * @returns The cached value if found and not expired, otherwise null.
      */
-    get(key: string, depArrayValues?: any[]): Promise<CachedItemContainer | null>;
+    get(key: string): Promise<CachedItemContainer | null>;
     /**
      * Sets a value in the cache with an optional timeout and callback.
      * @param key The cache key.
      * @param value The value to cache.
      * @param timeoutMins Timeout in minutes.
-     * @param dependencies Dependency values for cache checking.
+     * @param [options] Options object.
      */
-    set(key: string, value: any, timeoutMins?: number, dependencies?: any[]): Promise<CachedItemContainer | false>;
+    set(key: string, value: any, timeoutMins?: number, options?: CacheSetOptions): Promise<CachedItemContainer | false>;
     /**
      * Removes a value from the cache.
      * @param key The cache key to remove.
@@ -252,13 +251,6 @@ declare class RedisCache implements CacheInterface {
      * @returns True if the key exists in the cache, otherwise false.
      */
     has(key: string): Promise<boolean>;
-    /**
-     * Checks if the dependencies have changed.
-     * @param key The cache key.
-     * @param depArrayValues Dependency values to compare.
-     * @returns True if the dependencies have changed, otherwise false.
-     */
-    dependenciesChanged(key: string, depArrayValues: any[]): boolean;
 }
 
-export { type CacheEvent, type CacheEventCallback, type CacheEventCallbackData, type CacheInterface, type CachedItemContainer, type CachedResponse, type ExpressCacheOptions, type ExpressCacheOptionsRequired, type ExtendedRequest, MemoryCache, RedisCache, type RedisCacheConstructorOptions, type StoreCacheNegativeResult, type StoreCachePositiveResult, type StoreCacheResult, expressCache, hashString, inFlight };
+export { type CacheEvent, type CacheEventCallback, type CacheEventCallbackData, type CacheInterface, type CacheSetOptions, type CachedItemContainer, type CachedResponse, type ExpressCacheOptions, type ExpressCacheOptionsRequired, type ExtendedRequest, MemoryCache, RedisCache, type RedisCacheConstructorOptions, type StoreCacheNegativeResult, type StoreCachePositiveResult, type StoreCacheResult, expressCache, hashString, inFlight };
