@@ -12,7 +12,7 @@ interface CachedResponse {
     requestUrl: string;
 }
 
-type CacheEvent = "MISS" | "HIT" | "STORED" | "NOT_STORED" | "POOL_SEND" | "FINISHED_CACHE_HIT" | "FINISHED_CACHE_MISS_AND_STORED" | "FINISHED_CACHE_MISS_AND_NOT_STORED";
+type CacheEvent = "MISS" | "HIT" | "STORED" | "NOT_STORED" | "POOL_SEND" | "POOL_LEADER_TIMEOUT" | "FINISHED_CACHE_HIT" | "FINISHED_CACHE_MISS_AND_STORED" | "FINISHED_CACHE_MISS_AND_NOT_STORED";
 
 interface ExtendedRequest extends Request {
     cacheHash?: string;
@@ -101,8 +101,8 @@ interface ExpressCacheOptions extends CacheSetOptions {
      * @param {Response} res The current response.
      * @returns Boolean true if the request should be served a cached
      * response or false if not. You can also return a string explaining
-     * why this should not be cached, and it will be added to the reasons
-     * for the MISS event.
+     * why this should not be a cached response, and it will be added to
+     * the reasons for the MISS event.
      */
     shouldGetCache?: <RequestType extends ExtendedRequest>(req: RequestType, res: Response) => boolean | string;
     /**
