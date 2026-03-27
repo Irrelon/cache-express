@@ -224,7 +224,48 @@ export function expressCache(opts: ExpressCacheOptions) {
 			inFlight[cacheKey] = true;
 		}
 
+		let leaderTimeout: number | NodeJS.Timeout |  undefined;
+
+		// If the route handler never responds, clean up the pool so that new
+		// requests don't keep joining a dead pool indefinitely (deadpool hehe)
+		if (options.pooling) {
+			leaderTimeout = setTimeout(() => {
+				if (!inFlight[cacheKey]) return;
+				delete inFlight[cacheKey];
+
+				onCacheEvent(req, "POOL_LEADER_TIMEOUT", {
+					url: cacheUrl,
+					reason: `POOL_SIZE: ${getPoolSize(cacheKey)}`,
+				});
+
+				emitter.emit(cacheKey, {
+					body: JSON.stringify({
+						isErr: true,
+						status: 504,
+						err: {
+							key: "REQUEST_TIMEOUT",
+							msg: "Pool leader timed out waiting for the route handler to resolve"
+						}
+					}),
+					headers: JSON.stringify({"content-type": "application/json"}),
+					statusCode: 504,
+					requestUrl: req.originalUrl || req.url,
+				});
+			}, requestTimeoutMs);
+		}
+
 		const resolvePool = (bodyContent: string, isJson = false) => {
+			if (!inFlight[cacheKey]) {
+				console.error(`Could not resolve response in pooled request because the pool is no longer in flight. This could only happen if we timed out the pool leader flow then later got a resolved response. Request URL was: ${req.originalUrl || req.url}`);
+				return;
+			}
+
+			if (leaderTimeout) {
+				// Our request was resolved, clear the timeout handler
+				clearTimeout(leaderTimeout);
+				leaderTimeout = undefined;
+			}
+
 			const finalResponse: Required<CachedResponse> = {
 				body: isJson ? JSON.stringify(bodyContent) : bodyContent,
 				headers: JSON.stringify(res.getHeaders()),
