@@ -1,6 +1,6 @@
 {
 	"name": "@irrelon/cache-express",
-	"version": "5.0.1",
+	"version": "5.0.2",
 	"description": "Express Cache Middleware: Effortlessly cache responses with custom timeouts, dependencies, pooling, support for cache-control",
 	"license": "MIT",
 	"repository": "https://github.com/irrelon/cache-express",
@@ -46,9 +46,6 @@
 		"efficiency",
 		"dependency based cache"
 	],
-	"dependencies": {
-		"@rollup/plugin-json": "^6.1.0"
-	},
 	"peerDependencies": {
 		"@irrelon/emitter": "^6.1.0",
 		"express": "^4.x",
@@ -56,6 +53,7 @@
 	},
 	"private": false,
 	"devDependencies": {
+		"@rollup/plugin-json": "^6.1.0",
 		"@types/express": "^4.17.21",
 		"@types/node": "^22.10.1",
 		"@typescript-eslint/eslint-plugin": "^8.19.0",

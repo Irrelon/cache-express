@@ -212,7 +212,7 @@ function expressCache(opts) {
             }, requestTimeoutMs);
         }
         const resolvePool = (bodyContent, isJson = false) => {
-            if (!inFlight[cacheKey]) {
+            if (options.pooling && !inFlight[cacheKey]) {
                 console.error(`Could not resolve response in pooled request because the pool is no longer in flight. This could only happen if we timed out the pool leader flow then later got a resolved response. Request URL was: ${req.originalUrl || req.url}`);
                 return;
             }
@@ -336,7 +336,7 @@ function expiryFromMins(timeoutMins) {
     };
 }
 
-var version = "5.0.1";
+var version = "5.0.2";
 
 /**
  * MemoryCache class for caching data in memory.

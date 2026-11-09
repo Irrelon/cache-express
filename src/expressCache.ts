@@ -255,7 +255,7 @@ export function expressCache(opts: ExpressCacheOptions) {
 		}
 
 		const resolvePool = (bodyContent: string, isJson = false) => {
-			if (!inFlight[cacheKey]) {
+			if (options.pooling && !inFlight[cacheKey]) {
 				console.error(`Could not resolve response in pooled request because the pool is no longer in flight. This could only happen if we timed out the pool leader flow then later got a resolved response. Request URL was: ${req.originalUrl || req.url}`);
 				return;
 			}
